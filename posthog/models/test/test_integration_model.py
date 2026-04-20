@@ -10,16 +10,14 @@ from unittest.mock import MagicMock, call, patch
 
 from django.core.cache import cache
 from django.db import connection
-from django.utils import timezone
 
 from disposable_email_domains import blocklist as disposable_email_domains_list
 from parameterized import parameterized
 from rest_framework.exceptions import ValidationError
 
+from posthog.models.github_integration_base import GITHUB_BRANCH_CACHE_TTL_SECONDS, GITHUB_REPOSITORY_CACHE_TTL_SECONDS
 from posthog.models.instance_setting import set_instance_setting
 from posthog.models.integration import (
-    GITHUB_BRANCH_CACHE_TTL_SECONDS,
-    GITHUB_REPOSITORY_CACHE_TTL_SECONDS,
     DatabricksIntegration,
     DatabricksIntegrationError,
     EmailIntegration,
@@ -912,7 +910,7 @@ class TestGitHubIntegrationModel(BaseTest):
             call(limit=100, offset=100),
         ]
 
-    @patch("posthog.models.integration.GitHubIntegration.list_all_repositories")
+    @patch("posthog.models.github_integration_base.GitHubIntegrationBase.list_all_repositories")
     def test_list_cached_repositories_uses_cached_data_when_fresh(self, mock_list_all):
         cached_repositories = [
             {"id": 1, "name": "posthog", "full_name": "PostHog/posthog"},
@@ -922,17 +920,16 @@ class TestGitHubIntegrationModel(BaseTest):
             {"installation_id": "INSTALL", "account": {"name": "PostHog"}},
             {"access_token": "ACCESS_TOKEN"},
         )
-        integration.repository_cache = cached_repositories
-        integration.repository_cache_updated_at = timezone.now()
-        integration.save(update_fields=["repository_cache", "repository_cache_updated_at"])
+        github = GitHubIntegration(integration)
+        cache.set(github._get_repository_cache_key(), {"repositories": cached_repositories, "updated_at": time.time()})
 
-        repos, has_more = GitHubIntegration(integration).list_cached_repositories(limit=1, offset=1)
+        repos, has_more = github.list_cached_repositories(limit=1, offset=1)
 
         assert repos == [{"id": 2, "name": "posthog-js", "full_name": "PostHog/posthog-js"}]
         assert has_more is False
         mock_list_all.assert_not_called()
 
-    @patch("posthog.models.integration.GitHubIntegration.list_all_repositories")
+    @patch("posthog.models.github_integration_base.GitHubIntegrationBase.list_all_repositories")
     def test_sync_repository_cache_respects_refresh_cooldown(self, mock_list_all):
         cached_repositories = [
             {"id": 1, "name": "posthog", "full_name": "PostHog/posthog"},
@@ -942,17 +939,16 @@ class TestGitHubIntegrationModel(BaseTest):
             {"installation_id": "INSTALL", "account": {"name": "PostHog"}},
             {"access_token": "ACCESS_TOKEN"},
         )
-        integration.repository_cache = cached_repositories
-        integration.repository_cache_updated_at = timezone.now()
-        integration.save(update_fields=["repository_cache", "repository_cache_updated_at"])
+        github = GitHubIntegration(integration)
+        cache.set(github._get_repository_cache_key(), {"repositories": cached_repositories, "updated_at": time.time()})
 
-        repos = GitHubIntegration(integration).sync_repository_cache(min_refresh_interval_seconds=60)
+        repos = github.sync_repository_cache(min_refresh_interval_seconds=60)
 
         assert repos == cached_repositories
         mock_list_all.assert_not_called()
 
-    @patch("posthog.models.integration.GitHubIntegration.list_all_repositories")
-    def test_sync_repository_cache_only_updates_timestamp_when_snapshot_unchanged(self, mock_list_all):
+    @patch("posthog.models.github_integration_base.GitHubIntegrationBase.list_all_repositories")
+    def test_sync_repository_cache_refreshes_when_stale(self, mock_list_all):
         cached_repositories = [
             {"id": 1, "name": "posthog", "full_name": "PostHog/posthog"},
             {"id": 2, "name": "posthog-js", "full_name": "PostHog/posthog-js"},
@@ -961,23 +957,22 @@ class TestGitHubIntegrationModel(BaseTest):
             {"installation_id": "INSTALL", "account": {"name": "PostHog"}},
             {"access_token": "ACCESS_TOKEN"},
         )
-        original_updated_at = timezone.now() - timedelta(minutes=5)
-        integration.repository_cache = cached_repositories
-        integration.repository_cache_updated_at = original_updated_at
-        integration.save(update_fields=["repository_cache", "repository_cache_updated_at"])
+        github = GitHubIntegration(integration)
+        cache.set(
+            github._get_repository_cache_key(),
+            {
+                "repositories": cached_repositories,
+                "updated_at": time.time() - (GITHUB_REPOSITORY_CACHE_TTL_SECONDS + 1),
+            },
+        )
         mock_list_all.return_value = cached_repositories
 
-        with patch.object(integration, "save", wraps=integration.save) as mock_save:
-            repos = GitHubIntegration(integration).sync_repository_cache()
+        repos = github.sync_repository_cache()
 
         assert repos == cached_repositories
-        mock_save.assert_called_once_with(update_fields=["repository_cache_updated_at"])
-        integration.refresh_from_db()
-        assert integration.repository_cache == cached_repositories
-        assert integration.repository_cache_updated_at is not None
-        assert integration.repository_cache_updated_at > original_updated_at
+        mock_list_all.assert_called_once_with()
 
-    @patch("posthog.models.integration.GitHubIntegration.list_all_repositories")
+    @patch("posthog.models.github_integration_base.GitHubIntegrationBase.list_all_repositories")
     def test_list_cached_repositories_populates_cache_on_miss(self, mock_list_all):
         fetched_repositories = [
             {"id": 1, "name": "posthog", "full_name": "PostHog/posthog"},
@@ -989,16 +984,17 @@ class TestGitHubIntegrationModel(BaseTest):
         )
         mock_list_all.return_value = fetched_repositories
 
-        repos, has_more = GitHubIntegration(integration).list_cached_repositories(limit=1, offset=0)
+        github = GitHubIntegration(integration)
+        repos, has_more = github.list_cached_repositories(limit=1, offset=0)
 
-        integration.refresh_from_db()
         assert repos == [{"id": 1, "name": "posthog", "full_name": "PostHog/posthog"}]
         assert has_more is True
-        assert integration.repository_cache == fetched_repositories
-        assert integration.repository_cache_updated_at is not None
+        cached = cache.get(github._get_repository_cache_key())
+        assert cached is not None
+        assert cached["repositories"] == fetched_repositories
         mock_list_all.assert_called_once_with()
 
-    @patch("posthog.models.integration.GitHubIntegration.list_all_repositories")
+    @patch("posthog.models.github_integration_base.GitHubIntegrationBase.list_all_repositories")
     def test_list_cached_repositories_returns_stale_cache_on_refresh_error(self, mock_list_all):
         stale_repositories = [
             {"id": 1, "name": "posthog", "full_name": "PostHog/posthog"},
@@ -1008,22 +1004,20 @@ class TestGitHubIntegrationModel(BaseTest):
             {"installation_id": "INSTALL", "account": {"name": "PostHog"}},
             {"access_token": "ACCESS_TOKEN"},
         )
-        integration.repository_cache = stale_repositories
-        integration.repository_cache_updated_at = timezone.now() - timedelta(
-            seconds=GITHUB_REPOSITORY_CACHE_TTL_SECONDS + 1
+        github = GitHubIntegration(integration)
+        cache.set(
+            github._get_repository_cache_key(),
+            {"repositories": stale_repositories, "updated_at": time.time() - (GITHUB_REPOSITORY_CACHE_TTL_SECONDS + 1)},
         )
-        integration.save(update_fields=["repository_cache", "repository_cache_updated_at"])
         mock_list_all.side_effect = Exception("GitHub is slow")
 
-        repos, has_more = GitHubIntegration(integration).list_cached_repositories(limit=10, offset=0)
+        repos, has_more = github.list_cached_repositories(limit=10, offset=0)
 
-        integration.refresh_from_db()
         assert repos == stale_repositories
         assert has_more is False
-        assert integration.repository_cache == stale_repositories
         mock_list_all.assert_called_once_with()
 
-    @patch("posthog.models.integration.GitHubIntegration.list_all_repositories")
+    @patch("posthog.models.github_integration_base.GitHubIntegrationBase.list_all_repositories")
     def test_list_cached_repositories_raises_on_refresh_error_without_cache(self, mock_list_all):
         integration = self.create_integration(
             {"installation_id": "INSTALL", "account": {"name": "PostHog"}},
@@ -1034,12 +1028,9 @@ class TestGitHubIntegrationModel(BaseTest):
         with pytest.raises(Exception, match="GitHub is slow"):
             GitHubIntegration(integration).list_cached_repositories(limit=10, offset=0)
 
-        integration.refresh_from_db()
-        assert integration.repository_cache == []
-        assert integration.repository_cache_updated_at is None
         mock_list_all.assert_called_once_with()
 
-    @patch("posthog.models.integration.GitHubIntegration.list_all_repositories")
+    @patch("posthog.models.github_integration_base.GitHubIntegrationBase.list_all_repositories")
     def test_list_cached_repositories_pages_with_full_cached_snapshot(self, mock_list_all):
         fetched_repositories = [{"id": i, "name": f"repo-{i}", "full_name": f"PostHog/repo-{i}"} for i in range(650)]
         integration = self.create_integration(
@@ -1062,7 +1053,7 @@ class TestGitHubIntegrationModel(BaseTest):
             ("pagination_applies_after_filter", "posthog", 1, 1, [2], True),
         ]
     )
-    @patch("posthog.models.integration.GitHubIntegration.list_all_repositories")
+    @patch("posthog.models.github_integration_base.GitHubIntegrationBase.list_all_repositories")
     def test_list_cached_repositories_filters_search_before_pagination(
         self,
         _name,
