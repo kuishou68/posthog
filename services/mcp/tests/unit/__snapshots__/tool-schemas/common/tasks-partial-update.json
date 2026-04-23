@@ -1,0 +1,96 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "ci_prompt": {
+            "anyOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "description": "Custom prompt for CI fixes. If blank, a default prompt will be used."
+        },
+        "description": {
+            "type": "string"
+        },
+        "github_integration": {
+            "anyOf": [
+                {
+                    "type": "number"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "description": "GitHub integration for this task"
+        },
+        "id": {
+            "description": "A UUID string identifying this task.",
+            "type": "string"
+        },
+        "internal": {
+            "description": "If true, this task is for internal use and should not be exposed to end users.",
+            "type": "boolean"
+        },
+        "json_schema": {
+            "anyOf": [
+                {},
+                {
+                    "type": "null"
+                }
+            ],
+            "description": "JSON schema for the task. This is used to validate the output of the task."
+        },
+        "origin_product": {
+            "description": "* `error_tracking` - Error Tracking\n* `eval_clusters` - Eval Clusters\n* `user_created` - User Created\n* `automation` - Automation\n* `slack` - Slack\n* `support_queue` - Support Queue\n* `session_summaries` - Session Summaries\n* `signal_report` - Signal Report",
+            "enum": [
+                "error_tracking",
+                "eval_clusters",
+                "user_created",
+                "automation",
+                "slack",
+                "support_queue",
+                "session_summaries",
+                "signal_report"
+            ],
+            "type": "string"
+        },
+        "repository": {
+            "anyOf": [
+                {
+                    "maxLength": 255,
+                    "type": "string"
+                },
+                {
+                    "type": "null"
+                }
+            ]
+        },
+        "signal_report": {
+            "anyOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "null"
+                }
+            ]
+        },
+        "signal_report_task_relationship": {
+            "description": "* `implementation` - Implementation",
+            "enum": ["implementation"],
+            "type": "string"
+        },
+        "title": {
+            "maxLength": 255,
+            "type": "string"
+        },
+        "title_manually_set": {
+            "type": "boolean"
+        }
+    },
+    "required": ["id"],
+    "type": "object"
+}

@@ -1,0 +1,54 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "cron_expression": {
+            "maxLength": 100,
+            "type": "string"
+        },
+        "enabled": {
+            "type": "boolean"
+        },
+        "github_integration": {
+            "anyOf": [
+                {
+                    "type": "number"
+                },
+                {
+                    "type": "null"
+                }
+            ]
+        },
+        "id": {
+            "description": "A UUID string identifying this task automation.",
+            "type": "string"
+        },
+        "name": {
+            "maxLength": 255,
+            "type": "string"
+        },
+        "prompt": {
+            "type": "string"
+        },
+        "repository": {
+            "maxLength": 255,
+            "type": "string"
+        },
+        "template_id": {
+            "anyOf": [
+                {
+                    "maxLength": 255,
+                    "type": "string"
+                },
+                {
+                    "type": "null"
+                }
+            ]
+        },
+        "timezone": {
+            "maxLength": 128,
+            "type": "string"
+        }
+    },
+    "required": ["id"],
+    "type": "object"
+}
