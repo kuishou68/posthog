@@ -1,11 +1,13 @@
 from posthog.test.base import BaseTest
 from unittest.mock import MagicMock
 
+from parameterized import parameterized
 from rest_framework.exceptions import ValidationError
 
-from posthog.schema import AggregationType, RetentionFilter, RetentionQuery, TimeWindowMode
+from posthog.schema import AggregationType, EntityType, RetentionFilter, RetentionQuery, TimeWindowMode
 
 from posthog.hogql_queries.insights.retention.retention_validation_rules import DisallowCumulativeWith24HourWindows
+from posthog.hogql_queries.validation.rules import DisallowUnsupportedDataWarehouseSettings
 from posthog.hogql_queries.validation.validation import QueryValidationContext
 
 
@@ -13,6 +15,15 @@ class TestRetentionValidationRules(BaseTest):
     def _context(self, query: RetentionQuery) -> QueryValidationContext:
         runner = MagicMock(query=query, team=self.team, user=None)
         return QueryValidationContext(query=query, team=self.team, user=None, runner=runner)
+
+    def _data_warehouse_entity(self) -> dict[str, str]:
+        return {
+            "id": "signups",
+            "table_name": "signups",
+            "timestamp_field": "signed_up_at",
+            "aggregation_target_field": "person_id",
+            "type": EntityType.DATA_WAREHOUSE,
+        }
 
     def test_disallow_cumulative_with_24h_windows(self):
         query = RetentionQuery(
@@ -28,3 +39,48 @@ class TestRetentionValidationRules(BaseTest):
         query = RetentionQuery(retentionFilter=RetentionFilter(totalIntervals=8, aggregationType=AggregationType.COUNT))
 
         DisallowCumulativeWith24HourWindows().validate(self._context(query))
+
+    @parameterized.expand(
+        [
+            (
+                "filters",
+                {"properties": [{"key": "text", "value": "new", "operator": "exact", "type": "data_warehouse"}]},
+                "Filters are not supported for retention insights with a data warehouse series.",
+            ),
+            (
+                "test_account_filters",
+                {"filterTestAccounts": True},
+                "Test account filters are not supported for retention insights with a data warehouse series.",
+            ),
+            (
+                "sampling",
+                {"samplingFactor": 0.1},
+                "Sampling is not supported for retention insights with a data warehouse series.",
+            ),
+            (
+                "multiple_settings",
+                {"filterTestAccounts": True, "samplingFactor": 0.1},
+                "Test account filters and sampling are not supported for retention insights with a data warehouse series.",
+            ),
+        ]
+    )
+    def test_disallows_unsupported_data_warehouse_settings(self, _name, query_kwargs, expected_error):
+        query = RetentionQuery(
+            retentionFilter=RetentionFilter(targetEntity=self._data_warehouse_entity()),
+            **query_kwargs,
+        )
+
+        with self.assertRaises(ValidationError) as context:
+            DisallowUnsupportedDataWarehouseSettings().validate(self._context(query))
+
+        self.assertIn(expected_error, str(context.exception))
+        self.assertEqual(context.exception.get_codes(), ["data_warehouse_series_unsupported_settings"])
+
+    def test_allows_unsupported_settings_without_data_warehouse_series(self):
+        query = RetentionQuery(
+            filterTestAccounts=True,
+            samplingFactor=0.1,
+            retentionFilter=RetentionFilter(totalIntervals=8, aggregationType=AggregationType.COUNT),
+        )
+
+        DisallowUnsupportedDataWarehouseSettings().validate(self._context(query))

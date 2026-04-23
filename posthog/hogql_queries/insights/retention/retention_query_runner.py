@@ -44,6 +44,7 @@ from posthog.hogql_queries.insights.trends.breakdown import BREAKDOWN_OTHER_STRI
 from posthog.hogql_queries.insights.utils.breakdowns import has_breakdown_filter, has_single_breakdown
 from posthog.hogql_queries.query_runner import AnalyticsQueryRunner
 from posthog.hogql_queries.utils.query_date_range import QueryDateRangeWithIntervals
+from posthog.hogql_queries.validation.rules import DisallowUnsupportedDataWarehouseSettings
 from posthog.hogql_queries.validation.validation import QueryValidationRule
 from posthog.models import Team
 from posthog.models.action.action import Action
@@ -130,7 +131,7 @@ class RetentionQueryRunner(AnalyticsQueryRunner[RetentionQueryResponse]):
                 self.modifiers.inCohortVia = InCohortVia.LEFTJOIN
 
     def validators(self) -> Sequence[QueryValidationRule[RetentionQuery]]:
-        return (DisallowCumulativeWith24HourWindows(),)
+        return (DisallowCumulativeWith24HourWindows(), DisallowUnsupportedDataWarehouseSettings())
 
     @cached_property
     def property_aggregation_expr(self) -> ast.Expr | None:
