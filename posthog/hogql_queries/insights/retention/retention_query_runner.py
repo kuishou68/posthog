@@ -1,8 +1,7 @@
+from collections.abc import Sequence
 from datetime import datetime, timedelta
 from math import ceil
 from typing import Any, Optional, cast
-
-from rest_framework.exceptions import ValidationError
 
 from posthog.schema import (
     AggregationType,
@@ -39,11 +38,13 @@ from posthog.hogql_queries.insights.retention.retention_base_query_fixed import 
 from posthog.hogql_queries.insights.retention.retention_base_query_rolling import (
     RetentionRollingIntervalBaseQueryBuilder,
 )
+from posthog.hogql_queries.insights.retention.retention_validation_rules import DisallowCumulativeWith24HourWindows
 from posthog.hogql_queries.insights.retention.utils import has_cohort_property
 from posthog.hogql_queries.insights.trends.breakdown import BREAKDOWN_OTHER_STRING_LABEL
 from posthog.hogql_queries.insights.utils.breakdowns import has_breakdown_filter, has_single_breakdown
 from posthog.hogql_queries.query_runner import AnalyticsQueryRunner
 from posthog.hogql_queries.utils.query_date_range import QueryDateRangeWithIntervals
+from posthog.hogql_queries.validation.validation import QueryValidationRule
 from posthog.models import Team
 from posthog.models.action.action import Action
 from posthog.models.filters.mixins.utils import cached_property
@@ -101,18 +102,11 @@ class RetentionQueryRunner(AnalyticsQueryRunner[RetentionQueryResponse]):
         self.__post_init__()
 
     def __post_init__(self) -> None:
-        self.validate()
-
         # Called after __init__ and after dashboard filters are applied. This ensures cohort optimizations work for both direct filters and dashboard-level filters.
         self.update_hogql_modifiers()
 
-    def validate(self) -> None:
-        if (
-            self.query.retentionFilter
-            and self.query.retentionFilter.timeWindowMode == "24_hour_windows"
-            and self.query.retentionFilter.cumulative
-        ):
-            raise ValidationError("Cumulative retention is not supported for 24 hour windows.")
+    def validators(self) -> Sequence[QueryValidationRule[RetentionQuery]]:
+        return (DisallowCumulativeWith24HourWindows(),)
 
     def update_hogql_modifiers(self) -> None:
         """
