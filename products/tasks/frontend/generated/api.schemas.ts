@@ -142,6 +142,32 @@ export interface SandboxEnvironmentApi {
     readonly updated_at: string
 }
 
+export interface PatchedSandboxEnvironmentApi {
+    readonly id?: string
+    /** @maxLength 255 */
+    name?: string
+    network_access_level?: NetworkAccessLevelEnumApi
+    /** List of allowed domains for custom network access */
+    allowed_domains?: string[]
+    /** Whether to include default trusted domains (GitHub, npm, PyPI) */
+    include_default_domains?: boolean
+    /** List of repositories this environment applies to (format: org/repo) */
+    repositories?: string[]
+    /** Encrypted environment variables (write-only, never returned in responses) */
+    environment_variables?: unknown
+    /** Whether this environment has any environment variables set */
+    readonly has_environment_variables?: boolean
+    /** If true, only the creator can see this environment. Otherwise visible to whole team. */
+    private?: boolean
+    /** If true, this environment is for internal use (e.g. signals pipeline) and should not be exposed to end users. */
+    readonly internal?: boolean
+    /** Computed domain allowlist based on network_access_level and allowed_domains */
+    readonly effective_domains?: readonly string[]
+    readonly created_by?: UserBasicApi
+    readonly created_at?: string
+    readonly updated_at?: string
+}
+
 export interface TaskAutomationApi {
     readonly id: string
     /** @maxLength 255 */
@@ -182,6 +208,39 @@ export interface PaginatedTaskAutomationListApi {
     /** @nullable */
     previous?: string | null
     results: TaskAutomationApi[]
+}
+
+export interface PatchedTaskAutomationApi {
+    readonly id?: string
+    /** @maxLength 255 */
+    name?: string
+    prompt?: string
+    /** @maxLength 255 */
+    repository?: string
+    /** @nullable */
+    github_integration?: number | null
+    /** @maxLength 100 */
+    cron_expression?: string
+    /** @maxLength 128 */
+    timezone?: string
+    /**
+     * @maxLength 255
+     * @nullable
+     */
+    template_id?: string | null
+    enabled?: boolean
+    /** @nullable */
+    readonly last_run_at?: string | null
+    /** @nullable */
+    readonly last_run_status?: string | null
+    /** @nullable */
+    readonly last_task_id?: string | null
+    /** @nullable */
+    readonly last_task_run_id?: string | null
+    /** @nullable */
+    readonly last_error?: string | null
+    readonly created_at?: string
+    readonly updated_at?: string
 }
 
 /**
@@ -326,9 +385,9 @@ export interface PatchedTaskApi {
  * * `interactive` - interactive
  * `background` - background
  */
-export type TaskExecutionModeEnumApi = (typeof TaskExecutionModeEnumApi)[keyof typeof TaskExecutionModeEnumApi]
+export type Mode051EnumApi = (typeof Mode051EnumApi)[keyof typeof Mode051EnumApi]
 
-export const TaskExecutionModeEnumApi = {
+export const Mode051EnumApi = {
     Interactive: 'interactive',
     Background: 'background',
 } as const
@@ -358,9 +417,10 @@ export const RunSourceEnumApi = {
 /**
  * * `claude` - claude
  */
-export type ClaudeRuntimeAdapterEnumApi = (typeof ClaudeRuntimeAdapterEnumApi)[keyof typeof ClaudeRuntimeAdapterEnumApi]
+export type ClaudeTaskRunCreateSchemaRuntimeAdapterEnumApi =
+    (typeof ClaudeTaskRunCreateSchemaRuntimeAdapterEnumApi)[keyof typeof ClaudeTaskRunCreateSchemaRuntimeAdapterEnumApi]
 
-export const ClaudeRuntimeAdapterEnumApi = {
+export const ClaudeTaskRunCreateSchemaRuntimeAdapterEnumApi = {
     Claude: 'claude',
 } as const
 
@@ -405,7 +465,7 @@ export interface ClaudeTaskRunCreateSchemaApi {
 
 * `interactive` - interactive
 * `background` - background */
-    mode?: TaskExecutionModeEnumApi
+    mode?: Mode051EnumApi
     /**
      * Git branch to checkout in the sandbox
      * @maxLength 255
@@ -435,7 +495,7 @@ export interface ClaudeTaskRunCreateSchemaApi {
     /** Agent runtime adapter to launch for this run. Must be 'claude' for Claude runtimes.
 
 * `claude` - claude */
-    runtime_adapter: ClaudeRuntimeAdapterEnumApi
+    runtime_adapter: ClaudeTaskRunCreateSchemaRuntimeAdapterEnumApi
     /** LLM model identifier to run in the Claude runtime. */
     model: string
     /** Reasoning effort to request for models that expose an effort control.
@@ -460,9 +520,10 @@ export interface ClaudeTaskRunCreateSchemaApi {
 /**
  * * `codex` - codex
  */
-export type CodexRuntimeAdapterEnumApi = (typeof CodexRuntimeAdapterEnumApi)[keyof typeof CodexRuntimeAdapterEnumApi]
+export type CodexTaskRunCreateSchemaRuntimeAdapterEnumApi =
+    (typeof CodexTaskRunCreateSchemaRuntimeAdapterEnumApi)[keyof typeof CodexTaskRunCreateSchemaRuntimeAdapterEnumApi]
 
-export const CodexRuntimeAdapterEnumApi = {
+export const CodexTaskRunCreateSchemaRuntimeAdapterEnumApi = {
     Codex: 'codex',
 } as const
 
@@ -488,7 +549,7 @@ export interface CodexTaskRunCreateSchemaApi {
 
 * `interactive` - interactive
 * `background` - background */
-    mode?: TaskExecutionModeEnumApi
+    mode?: Mode051EnumApi
     /**
      * Git branch to checkout in the sandbox
      * @maxLength 255
@@ -518,7 +579,7 @@ export interface CodexTaskRunCreateSchemaApi {
     /** Agent runtime adapter to launch for this run. Must be 'codex' for Codex runtimes.
 
 * `codex` - codex */
-    runtime_adapter: CodexRuntimeAdapterEnumApi
+    runtime_adapter: CodexTaskRunCreateSchemaRuntimeAdapterEnumApi
     /** LLM model identifier to run in the Codex runtime. */
     model: string
     /** Reasoning effort to request for models that expose an effort control.
@@ -543,7 +604,7 @@ export interface TaskRunResumeRequestSchemaApi {
 
 * `interactive` - interactive
 * `background` - background */
-    mode?: TaskExecutionModeEnumApi
+    mode?: Mode051EnumApi
     /**
      * Git branch to checkout in the sandbox
      * @maxLength 255
@@ -586,9 +647,9 @@ export type TaskRunCreateRequestSchemaApi =
  * `tree_snapshot` - tree_snapshot
  * `user_attachment` - user_attachment
  */
-export type TaskRunArtifactTypeEnumApi = (typeof TaskRunArtifactTypeEnumApi)[keyof typeof TaskRunArtifactTypeEnumApi]
+export type TypeE8eEnumApi = (typeof TypeE8eEnumApi)[keyof typeof TypeE8eEnumApi]
 
-export const TaskRunArtifactTypeEnumApi = {
+export const TypeE8eEnumApi = {
     Plan: 'plan',
     Context: 'context',
     Reference: 'reference',
@@ -615,7 +676,7 @@ export interface TaskStagedArtifactFinalizeUploadApi {
 * `artifact` - artifact
 * `tree_snapshot` - tree_snapshot
 * `user_attachment` - user_attachment */
-    type: TaskRunArtifactTypeEnumApi
+    type: TypeE8eEnumApi
     /**
      * Optional source label for the artifact, such as agent_output or user_attachment
      * @maxLength 64
@@ -677,7 +738,7 @@ export interface TaskStagedArtifactPrepareUploadApi {
 * `artifact` - artifact
 * `tree_snapshot` - tree_snapshot
 * `user_attachment` - user_attachment */
-    type: TaskRunArtifactTypeEnumApi
+    type: TypeE8eEnumApi
     /**
      * Optional source label for the artifact, such as agent_output or user_attachment
      * @maxLength 64
@@ -774,9 +835,9 @@ export const TaskRunDetailEnvironmentEnumApi = {
  * * `claude` - claude
  * `codex` - codex
  */
-export type RuntimeAdapterEnumApi = (typeof RuntimeAdapterEnumApi)[keyof typeof RuntimeAdapterEnumApi]
+export type RuntimeAdapterB33EnumApi = (typeof RuntimeAdapterB33EnumApi)[keyof typeof RuntimeAdapterB33EnumApi]
 
-export const RuntimeAdapterEnumApi = {
+export const RuntimeAdapterB33EnumApi = {
     Claude: 'claude',
     Codex: 'codex',
 } as const
@@ -811,7 +872,7 @@ export interface TaskRunDetailApi {
 * `cloud` - Cloud */
     environment?: TaskRunDetailEnvironmentEnumApi
     /** Configured runtime adapter for this run, such as 'claude' or 'codex'. */
-    readonly runtime_adapter: RuntimeAdapterEnumApi | NullEnumApi | null
+    readonly runtime_adapter: RuntimeAdapterB33EnumApi | NullEnumApi | null
     /** Configured LLM provider for this run, such as 'anthropic' or 'openai'. */
     readonly provider: TaskRunDetailProviderEnumApi | NullEnumApi | null
     /**
@@ -898,7 +959,7 @@ export interface TaskRunBootstrapCreateRequestApi {
 
 * `interactive` - interactive
 * `background` - background */
-    mode?: TaskExecutionModeEnumApi
+    mode?: Mode051EnumApi
     /**
      * Git branch to checkout in the sandbox
      * @maxLength 255
@@ -923,7 +984,7 @@ export interface TaskRunBootstrapCreateRequestApi {
 
 * `claude` - claude
 * `codex` - codex */
-    runtime_adapter?: RuntimeAdapterEnumApi
+    runtime_adapter?: RuntimeAdapterB33EnumApi
     /** LLM model identifier to run in the selected runtime. */
     model?: string
     /** Reasoning effort to request for models that expose an effort control.
@@ -1046,7 +1107,7 @@ export interface TaskRunArtifactUploadApi {
 * `artifact` - artifact
 * `tree_snapshot` - tree_snapshot
 * `user_attachment` - user_attachment */
-    type: TaskRunArtifactTypeEnumApi
+    type: TypeE8eEnumApi
     /**
      * Optional source label for the artifact, such as agent_output or user_attachment
      * @maxLength 64
@@ -1101,7 +1162,7 @@ export interface TaskRunArtifactFinalizeUploadApi {
 * `artifact` - artifact
 * `tree_snapshot` - tree_snapshot
 * `user_attachment` - user_attachment */
-    type: TaskRunArtifactTypeEnumApi
+    type: TypeE8eEnumApi
     /**
      * Optional source label for the artifact, such as agent_output or user_attachment
      * @maxLength 64
@@ -1144,7 +1205,7 @@ export interface TaskRunArtifactPrepareUploadApi {
 * `artifact` - artifact
 * `tree_snapshot` - tree_snapshot
 * `user_attachment` - user_attachment */
-    type: TaskRunArtifactTypeEnumApi
+    type: TypeE8eEnumApi
     /**
      * Optional source label for the artifact, such as agent_output or user_attachment
      * @maxLength 64
@@ -1310,11 +1371,6 @@ export interface TaskRunStartRequestApi {
     pending_user_artifact_ids?: string[]
 }
 
-export interface TaskRepositoriesResponseApi {
-    /** Distinct repositories in use by non-deleted, non-internal tasks for the current team. */
-    repositories: string[]
-}
-
 /**
  * * `needs_setup` - needs_setup
  * `detected` - detected
@@ -1454,38 +1510,11 @@ export type TasksListParams = {
      */
     repository?: string
     /**
-     * Case-insensitive substring search over task title and description. A numeric value also matches the task number. An empty value disables the filter.
-     */
-    search?: string
-    /**
      * Filter by task run stage
      * @minLength 1
      */
     stage?: string
-    /**
- * Filter tasks by the status of their most recent run.
-
-* `not_started` - not_started
-* `queued` - queued
-* `in_progress` - in_progress
-* `completed` - completed
-* `failed` - failed
-* `cancelled` - cancelled
- * @minLength 1
- */
-    status?: TasksListStatus
 }
-
-export type TasksListStatus = (typeof TasksListStatus)[keyof typeof TasksListStatus]
-
-export const TasksListStatus = {
-    NotStarted: 'not_started',
-    Queued: 'queued',
-    InProgress: 'in_progress',
-    Completed: 'completed',
-    Failed: 'failed',
-    Cancelled: 'cancelled',
-} as const
 
 export type TasksRunsListParams = {
     /**

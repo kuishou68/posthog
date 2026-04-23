@@ -673,7 +673,7 @@ class TaskViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
         return Response(TaskSerializer(task, context=self.get_serializer_context()).data)
 
 
-@extend_schema(tags=["task-automations"])
+@extend_schema(tags=["task-automations", "tasks"])
 class TaskAutomationViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
     serializer_class = TaskAutomationSerializer
     authentication_classes = [SessionAuthentication, PersonalAPIKeyAuthentication, OAuthAccessTokenAuthentication]
@@ -701,6 +701,10 @@ class TaskAutomationViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
         delete_automation_schedule(automation)
         automation.delete()
 
+    @extend_schema(
+        request=None,
+        responses={200: OpenApiResponse(response=TaskAutomationSerializer, description="Task automation")},
+    )
     @action(detail=True, methods=["post"], url_path="run", required_scopes=["task:write"])
     def run(self, request, pk=None, **kwargs):
         automation = cast(TaskAutomation, self.get_object())
@@ -709,7 +713,7 @@ class TaskAutomationViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
         return Response(TaskAutomationSerializer(automation, context=self.get_serializer_context()).data)
 
 
-@extend_schema(tags=["task-runs"])
+@extend_schema(tags=["task-runs", "tasks"])
 class TaskRunViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
     """
     API for managing task runs. Each run represents an execution of a task.
@@ -2286,7 +2290,7 @@ class CodeInviteViewSet(viewsets.ViewSet):
         return Response({"has_access": has_redeemed})
 
 
-@extend_schema(tags=["sandbox-environments"])
+@extend_schema(tags=["sandbox-environments", "tasks"])
 class SandboxEnvironmentViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
     """API for managing sandbox environments that control network access for task runs."""
 

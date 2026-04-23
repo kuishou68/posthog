@@ -3965,6 +3965,261 @@
             "readOnlyHint": true
         }
     },
+    "tasks-list": {
+        "description": "List agent tasks in the current project. Supports filtering by `origin_product`, `stage`, `organization`, `repository`, `created_by`, and `internal`. Returns id, title, description, status, repository, current run summary, and timestamps. Use task-get for full detail on a single task. Requires the calling token's organization to have Tasks access enabled.",
+        "category": "Tasks",
+        "feature": "tasks",
+        "summary": "List tasks",
+        "title": "List tasks",
+        "required_scopes": ["task:read"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": true
+        }
+    },
+    "tasks-retrieve": {
+        "description": "Get a specific task by ID, including its description, repository, origin product, current stage, and latest run summary. Use task-runs-list or task-run-get to inspect past executions.",
+        "category": "Tasks",
+        "feature": "tasks",
+        "summary": "Get task",
+        "title": "Get task",
+        "required_scopes": ["task:read"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": true
+        }
+    },
+    "tasks-create": {
+        "description": "Create a new agent task in the current project. Provide `title`, `description`, and an optional `repository` (owner/repo format) plus `origin_product` metadata. Use tasks-run afterwards to trigger an execution.",
+        "category": "Tasks",
+        "feature": "tasks",
+        "summary": "Create task",
+        "title": "Create task",
+        "required_scopes": ["task:write"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true,
+            "readOnlyHint": false
+        }
+    },
+    "tasks-partial-update": {
+        "description": "Update an existing task by ID. Supports editing title, description, repository, and metadata. Does not trigger a run — use tasks-run for that.",
+        "category": "Tasks",
+        "feature": "tasks",
+        "summary": "Update task",
+        "title": "Update task",
+        "required_scopes": ["task:write"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": false
+        }
+    },
+    "tasks-destroy": {
+        "description": "Soft-delete a task by ID. The task will no longer appear in tasks-list but its historical runs are preserved.",
+        "category": "Tasks",
+        "feature": "tasks",
+        "summary": "Delete task",
+        "title": "Delete task",
+        "required_scopes": ["task:write"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true,
+            "readOnlyHint": false
+        }
+    },
+    "tasks-repository-readiness-retrieve": {
+        "description": "Check autonomy readiness for a repository (`owner/repo`) in the current project. Returns a readiness score and signals indicating whether the repository is configured for agent tasks. Supports `window_days` and `refresh` query params.",
+        "category": "Tasks",
+        "feature": "tasks",
+        "summary": "Check repository readiness",
+        "title": "Check repository readiness",
+        "required_scopes": ["task:read"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": true
+        }
+    },
+    "tasks-runs-list": {
+        "description": "List all runs for a specific task. Returns id, status, stage, environment, branch, error_message, created_at, and finished_at for each run.",
+        "category": "Tasks",
+        "feature": "tasks",
+        "summary": "List task runs",
+        "title": "List task runs",
+        "required_scopes": ["task:read"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": true
+        }
+    },
+    "tasks-runs-retrieve": {
+        "description": "Get full details for a specific task run including status, stage, environment, branch, artifacts summary, state, error message, and timestamps.",
+        "category": "Tasks",
+        "feature": "tasks",
+        "summary": "Get task run",
+        "title": "Get task run",
+        "required_scopes": ["task:read"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": true
+        }
+    },
+    "tasks-runs-session-logs-retrieve": {
+        "description": "Fetch session log events emitted by the agent for a specific run. Supports filtering by `event_types`, `exclude_types`, pagination with `limit`/`offset`, and `after` cursor. Use this instead of the streaming endpoint when invoking from an MCP client.",
+        "category": "Tasks",
+        "feature": "tasks",
+        "summary": "Get task run session logs",
+        "title": "Get task run session logs",
+        "required_scopes": ["task:read"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": true
+        }
+    },
+    "task-automations-list": {
+        "description": "List cron-scheduled task automations for the current project. Each automation periodically triggers a task run on its configured schedule.",
+        "category": "Tasks",
+        "feature": "tasks",
+        "summary": "List task automations",
+        "title": "List task automations",
+        "required_scopes": ["task:read"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": true
+        }
+    },
+    "task-automations-create": {
+        "description": "Create a cron-scheduled automation that periodically triggers an existing task. Provide `task` (id), `cron_expression`, and `timezone`. The schedule is synced with Temporal after creation.",
+        "category": "Tasks",
+        "feature": "tasks",
+        "summary": "Create task automation",
+        "title": "Create task automation",
+        "required_scopes": ["task:write"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true,
+            "readOnlyHint": false
+        }
+    },
+    "sandbox-list": {
+        "description": "List sandbox environments available for running tasks in the current project. Returns id, name, and network access level for each environment. Use the id in tasks-run's `sandbox_environment_id` field.",
+        "category": "Tasks",
+        "feature": "tasks",
+        "summary": "List sandbox environments",
+        "title": "List sandbox environments",
+        "required_scopes": ["task:read"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": true
+        }
+    },
+    "sandbox-retrieve": {
+        "description": "Get a specific sandbox environment by ID including its configuration and network access level.",
+        "category": "Tasks",
+        "feature": "tasks",
+        "summary": "Get sandbox environment",
+        "title": "Get sandbox environment",
+        "required_scopes": ["task:read"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": true
+        }
+    },
+    "task-automations-retrieve": {
+        "description": "Get a specific task automation by ID including its task reference, cron expression, timezone, enabled state, and last run metadata.",
+        "category": "Tasks",
+        "feature": "tasks",
+        "summary": "Get task automation",
+        "title": "Get task automation",
+        "required_scopes": ["task:read"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": true
+        }
+    },
+    "task-automations-partial-update": {
+        "description": "Update an existing task automation. Can change cron expression, timezone, or enabled state. Schedule changes are synced with Temporal automatically.",
+        "category": "Tasks",
+        "feature": "tasks",
+        "summary": "Update task automation",
+        "title": "Update task automation",
+        "required_scopes": ["task:write"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": true,
+            "readOnlyHint": false
+        }
+    },
+    "task-automations-destroy": {
+        "description": "Delete a task automation and remove its Temporal schedule. Existing runs created by this automation are preserved.",
+        "category": "Tasks",
+        "feature": "tasks",
+        "summary": "Delete task automation",
+        "title": "Delete task automation",
+        "required_scopes": ["task:write"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": true,
+            "readOnlyHint": false
+        }
+    },
+    "task-automations-run-create": {
+        "description": "Manually trigger a one-off execution of a task automation, bypassing its cron schedule. Returns the updated automation with its latest run metadata.",
+        "category": "Tasks",
+        "feature": "tasks",
+        "summary": "Run task automation",
+        "title": "Run task automation",
+        "required_scopes": ["task:write"],
+        "new_mcp": true,
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true,
+            "readOnlyHint": false
+        }
+    },
     "web-analytics-weekly-digest": {
         "description": "Summarizes a project's web analytics over a lookback window (default 7 days): unique visitors, pageviews, sessions, bounce rate, and average session duration with period-over-period comparisons, plus the top 5 pages, top 5 traffic sources, and goal conversions. Accepts optional `days` (1–90, default 7) and `compare` (bool, default true) query params — pass `days=30` to summarize the last month, or `compare=false` to skip the period-over-period comparison for a faster response. Use this to answer questions like \"how are my web analytics?\", \"how did the site do last week?\", or \"what's my traffic looking like this month?\".",
         "category": "Web analytics",

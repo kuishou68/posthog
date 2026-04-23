@@ -14,7 +14,7 @@ class TranscriptSegmentSerializer(serializers.Serializer):
     is_final = serializers.BooleanField(required=False, allow_null=True, help_text="Whether this is the final version")
 
 
-@extend_schema_serializer(component_name="DesktopRecordingTask")
+@extend_schema_serializer(component_name="DesktopRecordingExtractedTask")
 class TaskSerializer(serializers.Serializer):
     """Serializer for extracted tasks"""
 

@@ -1,0 +1,321 @@
+# MCP tool definition — tool entries are scaffolded from the OpenAPI schema.
+# The tool list and operation IDs are kept in sync automatically:
+#   pnpm --filter=@posthog/mcp run scaffold-yaml -- --sync-all
+#
+# To enable a tool, set enabled: true and add required scopes + annotations.
+# All other fields (title, description, enrich_url, etc.) are yours to configure.
+category: Tasks
+feature: tasks
+url_prefix: /tasks
+ui_apps: {}
+tools:
+    tasks-list:
+        operation: tasks_list
+        enabled: true
+        scopes:
+            - task:read
+        annotations:
+            readOnly: true
+            destructive: false
+            idempotent: true
+        enrich_url: '{id}'
+        list: true
+        title: List tasks
+        description: >
+            List agent tasks in the current project. Supports filtering by `origin_product`, `stage`, `organization`,
+            `repository`, `created_by`, and `internal`. Returns id, title, description, status, repository, current run
+            summary, and timestamps. Use task-get for full detail on a single task. Requires the calling token's
+            organization to have Tasks access enabled.
+    tasks-retrieve:
+        operation: tasks_retrieve
+        enabled: true
+        scopes:
+            - task:read
+        annotations:
+            readOnly: true
+            destructive: false
+            idempotent: true
+        enrich_url: '{id}'
+        title: Get task
+        description: >
+            Get a specific task by ID, including its description, repository, origin product, current stage, and latest
+            run summary. Use task-runs-list or task-run-get to inspect past executions.
+    tasks-create:
+        operation: tasks_create
+        enabled: true
+        scopes:
+            - task:write
+        annotations:
+            readOnly: false
+            destructive: false
+            idempotent: false
+        enrich_url: '{id}'
+        title: Create task
+        description: >
+            Create a new agent task in the current project. Provide `title`, `description`, and an optional `repository`
+            (owner/repo format) plus `origin_product` metadata. Use tasks-run afterwards to trigger an execution.
+    tasks-partial-update:
+        operation: tasks_partial_update
+        enabled: true
+        scopes:
+            - task:write
+        annotations:
+            readOnly: false
+            destructive: false
+            idempotent: true
+        enrich_url: '{id}'
+        title: Update task
+        description: >
+            Update an existing task by ID. Supports editing title, description, repository, and metadata. Does not
+            trigger a run — use tasks-run for that.
+    tasks-update:
+        operation: tasks_update
+        enabled: false
+    tasks-destroy:
+        operation: tasks_destroy
+        enabled: true
+        scopes:
+            - task:write
+        annotations:
+            readOnly: false
+            destructive: true
+            idempotent: false
+        title: Delete task
+        description: >
+            Soft-delete a task by ID. The task will no longer appear in tasks-list but its historical runs are preserved.
+        soft_delete: true
+    tasks-run-create:
+        operation: tasks_run_create
+        enabled: false
+    tasks-repository-readiness-retrieve:
+        operation: tasks_repository_readiness_retrieve
+        enabled: true
+        scopes:
+            - task:read
+        annotations:
+            readOnly: true
+            destructive: false
+            idempotent: true
+        title: Check repository readiness
+        description: >
+            Check autonomy readiness for a repository (`owner/repo`) in the current project. Returns a readiness score
+            and signals indicating whether the repository is configured for agent tasks. Supports `window_days` and
+            `refresh` query params.
+    tasks-staged-artifacts-prepare-upload-create:
+        operation: tasks_staged_artifacts_prepare_upload_create
+        enabled: false
+    tasks-staged-artifacts-finalize-upload-create:
+        operation: tasks_staged_artifacts_finalize_upload_create
+        enabled: false
+    tasks-runs-list:
+        operation: tasks_runs_list
+        enabled: true
+        scopes:
+            - task:read
+        annotations:
+            readOnly: true
+            destructive: false
+            idempotent: true
+        list: true
+        title: List task runs
+        description: >
+            List all runs for a specific task. Returns id, status, stage, environment, branch, error_message,
+            created_at, and finished_at for each run.
+    tasks-runs-retrieve:
+        operation: tasks_runs_retrieve
+        enabled: true
+        scopes:
+            - task:read
+        annotations:
+            readOnly: true
+            destructive: false
+            idempotent: true
+        title: Get task run
+        description: >
+            Get full details for a specific task run including status, stage, environment, branch, artifacts summary,
+            state, error message, and timestamps.
+    tasks-runs-session-logs-retrieve:
+        operation: tasks_runs_session_logs_retrieve
+        enabled: true
+        scopes:
+            - task:read
+        annotations:
+            readOnly: true
+            destructive: false
+            idempotent: true
+        title: Get task run session logs
+        description: >
+            Fetch session log events emitted by the agent for a specific run. Supports filtering by `event_types`,
+            `exclude_types`, pagination with `limit`/`offset`, and `after` cursor. Use this instead of the streaming
+            endpoint when invoking from an MCP client.
+    tasks-runs-create:
+        operation: tasks_runs_create
+        enabled: false
+    tasks-runs-partial-update:
+        operation: tasks_runs_partial_update
+        enabled: false
+    tasks-runs-append-log-create:
+        operation: tasks_runs_append_log_create
+        enabled: false
+    tasks-runs-artifacts-create:
+        operation: tasks_runs_artifacts_create
+        enabled: false
+    tasks-runs-artifacts-download-create:
+        operation: tasks_runs_artifacts_download_create
+        enabled: false
+    tasks-runs-artifacts-finalize-upload-create:
+        operation: tasks_runs_artifacts_finalize_upload_create
+        enabled: false
+    tasks-runs-artifacts-prepare-upload-create:
+        operation: tasks_runs_artifacts_prepare_upload_create
+        enabled: false
+    tasks-runs-artifacts-presign-create:
+        operation: tasks_runs_artifacts_presign_create
+        enabled: false
+    tasks-runs-command-create:
+        operation: tasks_runs_command_create
+        enabled: false
+    tasks-runs-connection-token-retrieve:
+        operation: tasks_runs_connection_token_retrieve
+        enabled: false
+    tasks-runs-logs-retrieve:
+        operation: tasks_runs_logs_retrieve
+        enabled: false
+    tasks-runs-relay-message-create:
+        operation: tasks_runs_relay_message_create
+        enabled: false
+    tasks-runs-set-output-partial-update:
+        operation: tasks_runs_set_output_partial_update
+        enabled: false
+    tasks-runs-start-create:
+        operation: tasks_runs_start_create
+        enabled: false
+    tasks-runs-stream-retrieve:
+        operation: tasks_runs_stream_retrieve
+        enabled: false
+    task-automations-list:
+        operation: task_automations_list
+        enabled: true
+        scopes:
+            - task:read
+        annotations:
+            readOnly: true
+            destructive: false
+            idempotent: true
+        enrich_url: '{id}'
+        list: true
+        title: List task automations
+        description: >
+            List cron-scheduled task automations for the current project. Each automation periodically triggers a task
+            run on its configured schedule.
+    task-automations-create:
+        operation: task_automations_create
+        enabled: true
+        scopes:
+            - task:write
+        annotations:
+            readOnly: false
+            destructive: false
+            idempotent: false
+        enrich_url: '{id}'
+        title: Create task automation
+        description: >
+            Create a cron-scheduled automation that periodically triggers an existing task. Provide `task` (id),
+            `cron_expression`, and `timezone`. The schedule is synced with Temporal after creation.
+    sandbox-list:
+        operation: sandbox_list
+        enabled: true
+        scopes:
+            - task:read
+        annotations:
+            readOnly: true
+            destructive: false
+            idempotent: true
+        enrich_url: '{id}'
+        list: true
+        title: List sandbox environments
+        description: >
+            List sandbox environments available for running tasks in the current project. Returns id, name, and network
+            access level for each environment. Use the id in tasks-run's `sandbox_environment_id` field.
+    sandbox-create:
+        operation: sandbox_create
+        enabled: false
+    code-invites-check-access-retrieve:
+        operation: code_invites_check_access_retrieve
+        enabled: false
+    code-invites-redeem-create:
+        operation: code_invites_redeem_create
+        enabled: false
+    sandbox-retrieve:
+        operation: sandbox_retrieve
+        enabled: true
+        scopes:
+            - task:read
+        annotations:
+            readOnly: true
+            destructive: false
+            idempotent: true
+        title: Get sandbox environment
+        description: >
+            Get a specific sandbox environment by ID including its configuration and network access level.
+    sandbox-partial-update:
+        operation: sandbox_partial_update
+        enabled: false
+    sandbox-destroy:
+        operation: sandbox_destroy
+        enabled: false
+    task-automations-retrieve:
+        operation: task_automations_retrieve
+        enabled: true
+        scopes:
+            - task:read
+        annotations:
+            readOnly: true
+            destructive: false
+            idempotent: true
+        title: Get task automation
+        description: >
+            Get a specific task automation by ID including its task reference, cron expression, timezone, enabled
+            state, and last run metadata.
+    task-automations-update:
+        operation: task_automations_update
+        enabled: false
+    task-automations-partial-update:
+        operation: task_automations_partial_update
+        enabled: true
+        scopes:
+            - task:write
+        annotations:
+            readOnly: false
+            destructive: false
+            idempotent: true
+        title: Update task automation
+        description: >
+            Update an existing task automation. Can change cron expression, timezone, or enabled state. Schedule
+            changes are synced with Temporal automatically.
+    task-automations-destroy:
+        operation: task_automations_destroy
+        enabled: true
+        scopes:
+            - task:write
+        annotations:
+            readOnly: false
+            destructive: true
+            idempotent: false
+        title: Delete task automation
+        description: >
+            Delete a task automation and remove its Temporal schedule. Existing runs created by this automation
+            are preserved.
+    task-automations-run-create:
+        operation: task_automations_run_create
+        enabled: true
+        scopes:
+            - task:write
+        annotations:
+            readOnly: false
+            destructive: false
+            idempotent: false
+        title: Run task automation
+        description: >
+            Manually trigger a one-off execution of a task automation, bypassing its cron schedule. Returns the
+            updated automation with its latest run metadata.
