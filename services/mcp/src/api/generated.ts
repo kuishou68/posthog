@@ -22912,7 +22912,7 @@ export namespace Schemas {
       readonly queue_id: string;
       /** Human-readable name of the queue that currently owns this pending trace. */
       readonly queue_name: string;
-      /** Trace ID currently pending human review. */
+      /** Trace ID currently pending review. */
       readonly trace_id: string;
       readonly created_at: string;
       /** @nullable */
@@ -24396,7 +24396,7 @@ export namespace Schemas {
       /** Trace ID for the review. */
       readonly trace_id: string;
       /**
-       * Optional human comment or reasoning for the review.
+       * Optional comment or reasoning for the review.
        * @nullable
        */
       readonly comment: string | null;
@@ -29630,7 +29630,7 @@ export namespace Schemas {
        */
       trace_id?: string;
       /**
-       * Optional human comment or reasoning for the review.
+       * Optional comment or reasoning for the review.
        * @nullable
        */
       comment?: string | null;
@@ -35507,7 +35507,7 @@ export namespace Schemas {
        */
       trace_id: string;
       /**
-       * Optional human comment or reasoning for the review.
+       * Optional comment or reasoning for the review.
        * @nullable
        */
       comment?: string | null;
