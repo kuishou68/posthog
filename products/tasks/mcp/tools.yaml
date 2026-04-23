@@ -205,8 +205,8 @@ tools:
         list: true
         title: List task automations
         description: >
-            List cron-scheduled task automations for the current project. Each automation creates and runs a task on
-            its configured schedule.
+            List cron-scheduled task automations for the current project. Each automation creates and runs a task on its
+            configured schedule.
     task-automations-create:
         operation: task_automations_create
         enabled: true
@@ -256,7 +256,7 @@ tools:
             destructive: false
             idempotent: true
         title: Get sandbox environment
-        description: >
+        description: |
             Get a specific sandbox environment by ID including its configuration and network access level.
     sandbox-partial-update:
         operation: sandbox_partial_update
@@ -291,8 +291,8 @@ tools:
             idempotent: true
         title: Update task automation
         description: >
-            Update an existing task automation. Can change cron expression, timezone, or enabled state. Schedule
-            changes are synced with Temporal automatically.
+            Update an existing task automation. Can change cron expression, timezone, or enabled state. Schedule changes
+            are synced with Temporal automatically.
     task-automations-destroy:
         operation: task_automations_destroy
         enabled: true
@@ -304,8 +304,8 @@ tools:
             idempotent: false
         title: Delete task automation
         description: >
-            Delete a task automation and remove its Temporal schedule. Existing runs created by this automation
-            are preserved.
+            Delete a task automation and remove its Temporal schedule. Existing runs created by this automation are
+            preserved.
     task-automations-run-create:
         operation: task_automations_run_create
         enabled: true
@@ -317,5 +317,8 @@ tools:
             idempotent: false
         title: Run task automation
         description: >
-            Manually trigger a one-off execution of a task automation, bypassing its cron schedule. Returns the
-            updated automation with its latest run metadata.
+            Manually trigger a one-off execution of a task automation, bypassing its cron schedule. Returns the updated
+            automation with its latest run metadata.
+    tasks-runs-resume-in-cloud-create:
+        operation: tasks_runs_resume_in_cloud_create
+        enabled: false

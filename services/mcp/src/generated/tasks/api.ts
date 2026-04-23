@@ -158,7 +158,19 @@ export const TasksListQueryParams = /* @__PURE__ */ zod.object({
     organization: zod.string().min(1).optional().describe('Filter by repository organization'),
     origin_product: zod.string().min(1).optional().describe('Filter by origin product'),
     repository: zod.string().min(1).optional().describe('Filter by repository name (can include org/repo format)'),
+    search: zod
+        .string()
+        .optional()
+        .describe(
+            'Case-insensitive substring search over task title and description. A numeric value also matches the task number. An empty value disables the filter.'
+        ),
     stage: zod.string().min(1).optional().describe('Filter by task run stage'),
+    status: zod
+        .enum(['not_started', 'queued', 'in_progress', 'completed', 'failed', 'cancelled'])
+        .optional()
+        .describe(
+            'Filter tasks by the status of their most recent run.\n\n* `not_started` - not_started\n* `queued` - queued\n* `in_progress` - in_progress\n* `completed` - completed\n* `failed` - failed\n* `cancelled` - cancelled'
+        ),
 })
 
 /**

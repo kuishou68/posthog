@@ -46,7 +46,9 @@ const tasksList = (): ToolBase<typeof TasksListSchema, WithPostHogUrl<Schemas.Pa
                 organization: params.organization,
                 origin_product: params.origin_product,
                 repository: params.repository,
+                search: params.search,
                 stage: params.stage,
+                status: params.status,
             },
         })
         return await withPostHogUrl(
