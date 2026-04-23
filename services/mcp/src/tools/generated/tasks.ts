@@ -181,15 +181,14 @@ const tasksPartialUpdate = (): ToolBase<typeof TasksPartialUpdateSchema, WithPos
 
 const TasksDestroySchema = TasksDestroyParams.omit({ project_id: true })
 
-const tasksDestroy = (): ToolBase<typeof TasksDestroySchema, Schemas.Task> => ({
+const tasksDestroy = (): ToolBase<typeof TasksDestroySchema, unknown> => ({
     name: 'tasks-destroy',
     schema: TasksDestroySchema,
     handler: async (context: Context, params: z.infer<typeof TasksDestroySchema>) => {
         const projectId = await context.stateManager.getProjectId()
-        const result = await context.api.request<Schemas.Task>({
-            method: 'PATCH',
+        const result = await context.api.request<unknown>({
+            method: 'DELETE',
             path: `/api/projects/${encodeURIComponent(String(projectId))}/tasks/${encodeURIComponent(String(params.id))}/`,
-            body: { deleted: true },
         })
         return result
     },

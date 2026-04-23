@@ -83,7 +83,6 @@ tools:
         title: Delete task
         description: >
             Soft-delete a task by ID. The task will no longer appear in tasks-list but its historical runs are preserved.
-        soft_delete: true
     tasks-run-create:
         operation: tasks_run_create
         enabled: false
