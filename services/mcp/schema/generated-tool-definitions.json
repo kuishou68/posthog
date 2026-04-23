@@ -3789,7 +3789,7 @@
         }
     },
     "task-automations-list": {
-        "description": "List cron-scheduled task automations for the current project. Each automation periodically triggers a task run on its configured schedule.",
+        "description": "List cron-scheduled task automations for the current project. Each automation creates and runs a task on its configured schedule.",
         "category": "Tasks",
         "feature": "tasks",
         "summary": "List task automations",
@@ -3804,7 +3804,7 @@
         }
     },
     "task-automations-create": {
-        "description": "Create a cron-scheduled automation that periodically triggers an existing task. Provide `task` (id), `cron_expression`, and `timezone`. The schedule is synced with Temporal after creation.",
+        "description": "Create a cron-scheduled automation that creates and runs tasks on a schedule. Required fields: `name`, `prompt`, `repository` (organization/repository format), and `cron_expression`. Optional: `timezone`, `github_integration`, `template_id`, `enabled`. The schedule is synced with Temporal after creation.",
         "category": "Tasks",
         "feature": "tasks",
         "summary": "Create task automation",
@@ -3849,7 +3849,7 @@
         }
     },
     "task-automations-retrieve": {
-        "description": "Get a specific task automation by ID including its task reference, cron expression, timezone, enabled state, and last run metadata.",
+        "description": "Get a specific task automation by ID including name, prompt, repository, cron expression, timezone, enabled state, and last-run metadata (last_run_at, last_run_status, last_task_id, last_task_run_id, last_error).",
         "category": "Tasks",
         "feature": "tasks",
         "summary": "Get task automation",
