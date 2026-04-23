@@ -2023,6 +2023,17 @@ class GitHubUserAuthorization:
     refresh_token_expires_in: int | None
 
 
+@dataclass(frozen=True)
+class GitHubInstallationAccess:
+    """Installation-level access token response for a GitHub App installation."""
+
+    installation_id: str
+    installation_info: dict[str, Any]
+    access_token: str
+    token_expires_at: str
+    repository_selection: str
+
+
 class GitHubIntegration(GitHubIntegrationBase):
     integration: Integration
 
