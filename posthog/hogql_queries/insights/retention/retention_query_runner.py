@@ -105,9 +105,6 @@ class RetentionQueryRunner(AnalyticsQueryRunner[RetentionQueryResponse]):
         # Called after __init__ and after dashboard filters are applied. This ensures cohort optimizations work for both direct filters and dashboard-level filters.
         self.update_hogql_modifiers()
 
-    def validators(self) -> Sequence[QueryValidationRule[RetentionQuery]]:
-        return (DisallowCumulativeWith24HourWindows(),)
-
     def update_hogql_modifiers(self) -> None:
         """
         Update HogQL modifiers to optimize cohort filtering performance.
@@ -131,6 +128,9 @@ class RetentionQueryRunner(AnalyticsQueryRunner[RetentionQueryResponse]):
             # Use LEFTJOIN for cohort filters to avoid slow subquery evaluation
             if has_cohort_filter:
                 self.modifiers.inCohortVia = InCohortVia.LEFTJOIN
+
+    def validators(self) -> Sequence[QueryValidationRule[RetentionQuery]]:
+        return (DisallowCumulativeWith24HourWindows(),)
 
     @cached_property
     def property_aggregation_expr(self) -> ast.Expr | None:
