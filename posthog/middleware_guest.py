@@ -5,10 +5,12 @@ All guest enforcement runs through this middleware. The request either matches a
 (so guest clients can't enumerate the surface area) or `redirect("/guest")` for non-API
 SPA routes (so the FE scene allowlist/landing page can take over).
 
-The middleware is authoritative. Viewsets and the `AccessControl` layer are NOT expected to
-re-check guest status; once a request reaches its view, the guest is indistinguishable from
-a regular viewer-level member on that resource (grant creation mirrors an AC row, see
-`posthog.rbac.guest_grants`).
+Since `is_guest=True` now flips the AC layer's default from allow to deny, the per-resource
+rules below are just a thin adapter: they pull `team_id` and `resource_id` out of the URL
+(or the `X-PostHog-Scene-Resource` header for query endpoints) and ask
+`UserAccessControl.access_level_for_object` whether the guest has any non-`none` level on
+that specific object. All the AC-table + dashboard-tile cascade semantics live in the AC
+layer itself (tile AC rows are written by `guest_grants.create_grant` at grant time).
 
 Adding support for a new resource type is a single entry in `GUEST_RULES`.
 """
@@ -19,11 +21,16 @@ from typing import cast
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
 
-from posthog.models import GuestResourceGrant
+from posthog.models import OrganizationMembership
 from posthog.models.insight import Insight
+from posthog.models.team.team import Team
 from posthog.models.user import User
+from posthog.rbac.user_access_control import NO_ACCESS_LEVEL, UserAccessControl
 
-from products.dashboards.backend.models.dashboard_tile import DashboardTile
+from products.dashboards.backend.models.dashboard import Dashboard
+from products.notebooks.backend.models import Notebook
+
+from ee.models.rbac.access_control import AccessControl
 
 
 class GuestRule:
@@ -51,11 +58,83 @@ class AlwaysAllowed(GuestRule):
         return True
 
 
+def _guest_membership_for_team(user: User, team_id: int) -> OrganizationMembership | None:
+    """Fetch the guest membership tied to the org that owns this team, or `None` if the user
+    isn't a guest there. Consolidates the `is_guest=True & correct org` lookup used by every
+    rule below."""
+    try:
+        team = Team.objects.select_related("organization").get(id=team_id)
+    except Team.DoesNotExist:
+        return None
+    return (
+        OrganizationMembership.objects.filter(
+            user=user,
+            organization_id=team.organization_id,
+            is_guest=True,
+        )
+        .select_related("organization")
+        .first()
+    )
+
+
+def _has_any_team_ac_row(user: User, team_id: int) -> bool:
+    """Does the guest have ANY AccessControl row scoped to this team? Used by the team-metadata
+    rule — guests with zero grants have no business pulling team-wide metadata (themes, tags)."""
+    membership = _guest_membership_for_team(user, team_id)
+    if membership is None:
+        return False
+    return AccessControl.objects.filter(organization_member=membership, team_id=team_id).exists()
+
+
+def _resolve_object(resource: str, resource_id: str, team_id: int):
+    """Resolve a URL-style resource identifier to a concrete model instance we can pass to
+    `UserAccessControl.access_level_for_object`. Returns `None` when the resource doesn't
+    exist — the caller treats that as "not allowed" (guests can't enumerate)."""
+    if resource == "dashboard":
+        if not resource_id.isdigit():
+            return None
+        return Dashboard.objects.filter(id=int(resource_id), team_id=team_id).first()
+    if resource == "insight":
+        if resource_id.isdigit():
+            return Insight.objects.filter(id=int(resource_id), team_id=team_id).first()
+        return Insight.objects.filter(short_id=resource_id, team_id=team_id).first()
+    if resource == "notebook":
+        if resource_id.isdigit():
+            return Notebook.objects.filter(id=int(resource_id), team_id=team_id).first()
+        return Notebook.objects.filter(short_id=resource_id, team_id=team_id).first()
+    return None
+
+
+def _guest_has_access_to(user: User, team_id: int, resource: str, resource_id: str) -> bool:
+    """Single decision point reused by every resource-bound rule.
+
+    Returns True iff `UserAccessControl.access_level_for_object` resolves to a non-`none`
+    level for the (guest, team, resource, resource_id) tuple. The dashboard-tile cascade is
+    already handled inside the AC layer because `create_grant` writes tile AC rows at grant
+    time; the middleware itself never needs to check parent dashboards.
+    """
+    membership = _guest_membership_for_team(user, team_id)
+    if membership is None:
+        return False
+    try:
+        team = Team.objects.get(id=team_id)
+    except Team.DoesNotExist:
+        return False
+
+    obj = _resolve_object(resource, resource_id, team_id)
+    if obj is None:
+        return False
+
+    uac = UserAccessControl(user=user, team=team)
+    level = uac.access_level_for_object(obj, resource=resource)  # type: ignore[arg-type]
+    return level is not None and level != NO_ACCESS_LEVEL
+
+
 class TeamScopedMetadataRead(GuestRule):
     """GET-only team-scoped endpoints (themes, variables, tags, annotations, cohorts, quick filters).
 
     Insights and dashboards transitively depend on these to render. Allowed when the guest
-    has any active grant in the team — otherwise they have no business reading team metadata.
+    has any AC row on this team — otherwise they have no business reading team metadata.
     """
 
     def matches(self, request: HttpRequest) -> re.Match | None:
@@ -65,53 +144,12 @@ class TeamScopedMetadataRead(GuestRule):
 
     def allows(self, request: HttpRequest, user: User, match: re.Match) -> bool:
         team_id = int(match.group("team_id"))
-        return GuestResourceGrant.objects.filter(
-            organization_membership__user=user,
-            organization_membership__is_guest=True,
-            team_id=team_id,
-        ).exists()
-
-
-def _guest_grants_qs(user: User, team_id: int):
-    return GuestResourceGrant.objects.filter(
-        organization_membership__user=user,
-        organization_membership__is_guest=True,
-        team_id=team_id,
-    )
-
-
-def _insight_inherited_via_dashboard(user: User, team_id: int, resource_id: str) -> bool:
-    """An insight is allowed if it is a tile of a granted dashboard.
-
-    The URL-side insight id may be either a numeric PK or a `short_id` — mirror the viewset
-    resolution order: numeric first, then short_id lookup.
-    """
-    insight_pk: int | None = None
-    if resource_id.isdigit():
-        insight_pk = int(resource_id)
-    else:
-        insight_pk = Insight.objects.filter(team_id=team_id, short_id=resource_id).values_list("id", flat=True).first()
-    if insight_pk is None:
-        return False
-    parent_dashboard_ids = list(
-        DashboardTile.objects.filter(insight_id=insight_pk).values_list("dashboard_id", flat=True)
-    )
-    if not parent_dashboard_ids:
-        return False
-    return (
-        _guest_grants_qs(user, team_id)
-        .filter(
-            resource="dashboard",
-            resource_id__in=[str(d) for d in parent_dashboard_ids],
-        )
-        .exists()
-    )
+        return _has_any_team_ac_row(user, team_id)
 
 
 class GrantBoundResource(GuestRule):
-    """`/api/.../(dashboards|insights|notebooks)/<id>` — allowed iff the guest has a grant on the id.
-
-    For insights, also allowed when the insight is a tile of a granted dashboard.
+    """`/api/.../(dashboards|insights|notebooks)/<id>` — allowed iff the AC layer grants this
+    guest non-`none` access to the addressed object.
     """
 
     def __init__(self, resource: str, pattern: str):
@@ -121,19 +159,12 @@ class GrantBoundResource(GuestRule):
     def allows(self, request: HttpRequest, user: User, match: re.Match) -> bool:
         team_id = int(match.group("team_id"))
         resource_id = match.group("resource_id")
-        qs = _guest_grants_qs(user, team_id)
-        if qs.filter(resource=self._resource, resource_id=resource_id).exists():
-            return True
-        if self._resource == "insight":
-            return _insight_inherited_via_dashboard(user, team_id, resource_id)
-        return False
+        return _guest_has_access_to(user, team_id, self._resource, resource_id)
 
 
 class GrantBoundListFilter(GuestRule):
-    """GET `/api/.../<resource>/?short_id=<id>` — the FE scene loaders use this to resolve by short_id.
-
-    Allowed when `short_id` names a granted resource; for insights also allowed via
-    tile-of-granted-dashboard inheritance.
+    """GET `/api/.../<resource>/?short_id=<id>` — FE scene loaders resolve by short_id. Allowed
+    when the AC layer grants non-`none` access to the addressed object.
     """
 
     def __init__(self, resource: str, pattern: str, filter_key: str = "short_id"):
@@ -151,20 +182,15 @@ class GrantBoundListFilter(GuestRule):
         if not filter_value:
             return False
         team_id = int(match.group("team_id"))
-        qs = _guest_grants_qs(user, team_id)
-        if qs.filter(resource=self._resource, resource_id=filter_value).exists():
-            return True
-        if self._resource == "insight":
-            return _insight_inherited_via_dashboard(user, team_id, filter_value)
-        return False
+        return _guest_has_access_to(user, team_id, self._resource, filter_value)
 
 
 class SceneBoundQuery(GuestRule):
     """`POST|GET /api/.../query[/<kind>]/` — allowed iff the `X-PostHog-Scene-Resource` header
-    identifies a granted resource. Header format: `resource:resource_id`.
+    identifies a resource the AC layer grants this guest. Header format: `resource:resource_id`.
 
-    This is the only binding source for queries; body keys such as `insight_id`/`dashboard_id`
-    are not read here (design: one scene-context source for the whole SPA).
+    The query rescoper (PR #3) applies further team/object-level filters to the query body;
+    this middleware rule only guards the endpoint reachability.
     """
 
     _SCENE_HEADER = "X-PostHog-Scene-Resource"
@@ -185,12 +211,7 @@ class SceneBoundQuery(GuestRule):
         if not resource_id or resource not in self._VALID_RESOURCES:
             return False
         team_id = int(match.group("team_id"))
-        qs = _guest_grants_qs(user, team_id)
-        if qs.filter(resource=resource, resource_id=resource_id).exists():
-            return True
-        if resource == "insight":
-            return _insight_inherited_via_dashboard(user, team_id, resource_id)
-        return False
+        return _guest_has_access_to(user, team_id, resource, resource_id)
 
 
 _METADATA_ENDPOINTS = (

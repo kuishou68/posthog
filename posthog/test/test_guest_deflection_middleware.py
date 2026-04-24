@@ -3,25 +3,34 @@ from posthog.test.base import APIBaseTest
 from parameterized import parameterized
 from rest_framework import status
 
-from posthog.models import GuestResourceGrant, OrganizationMembership
+from posthog.constants import AvailableFeature
+from posthog.models import OrganizationMembership
 from posthog.models.insight import Insight
 from posthog.models.user import User
+from posthog.rbac.guest_grants import create_grant
 
 from products.dashboards.backend.models.dashboard import Dashboard
 from products.dashboards.backend.models.dashboard_tile import DashboardTile
 
 
 class TestGuestDeflectionMiddleware(APIBaseTest):
-    """Parameterized coverage of the guest deflection rule table.
+    """HTTP-level coverage of the guest deflection rules.
 
-    Each row describes a single request and its expected HTTP status. Setup wires up:
+    Setup wires up:
     - one guest user with an optional grant list
-    - one granted dashboard + one granted notebook + one "tile" insight
+    - one granted dashboard + one "tile" insight inheriting access via dashboard cascade
     - one ungranted dashboard / insight / notebook as foils
     """
 
     def setUp(self) -> None:
         super().setUp()
+        # Advanced permissions feature is required for the UserAccessControl layer to honor
+        # per-object AC rows. Without it the AC layer short-circuits and guests look no
+        # different from members without grants — breaks the cascade tests.
+        self.organization.available_product_features = [
+            {"key": AvailableFeature.ADVANCED_PERMISSIONS, "name": AvailableFeature.ADVANCED_PERMISSIONS},
+        ]
+        self.organization.save()
         # Promote the base test user to an admin and create a separate guest user.
         OrganizationMembership.objects.filter(organization=self.organization, user=self.user).update(
             level=OrganizationMembership.Level.ADMIN
@@ -46,15 +55,26 @@ class TestGuestDeflectionMiddleware(APIBaseTest):
     def _login_regular(self) -> None:
         self.client.force_login(self.user)
 
-    def _grant(self, resource: str, resource_id: str) -> GuestResourceGrant:
-        # Mirror what `guest_grants.create_grant` does, minus the AC row — the middleware only
-        # reads GuestResourceGrant, so tests keep setup lean. Service-level tests verify the AC
-        # mirror side of the write path in `test_guest_grants.py`.
-        return GuestResourceGrant.objects.create(
-            organization_membership=self.guest_membership,
+    def _grant(self, resource: str, resource_id: str) -> None:
+        # Write via the service so the AC rows + dashboard-tile cascade match what the invite
+        # flow would produce. The middleware reads AC rows now that `is_guest=True` inverts
+        # the AC default.
+        if resource == "dashboard":
+            target = Dashboard.objects.get(pk=int(resource_id))
+        elif resource == "insight":
+            target = (
+                Insight.objects.get(pk=int(resource_id))
+                if resource_id.isdigit()
+                else Insight.objects.get(short_id=resource_id)
+            )
+        else:
+            raise AssertionError(f"Unsupported resource in test helper: {resource}")
+        create_grant(
+            membership=self.guest_membership,
             team=self.team,
             resource=resource,
-            resource_id=resource_id,
+            resource_id=str(target.pk),
+            created_by=self.user,
         )
 
     def test_non_guest_user_is_never_deflected(self) -> None:
@@ -153,6 +173,8 @@ class TestGuestDeflectionMiddleware(APIBaseTest):
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_tile_insight_is_allowed_when_parent_dashboard_is_granted(self) -> None:
+        # Dashboard grant cascades AC rows to tile insights; the middleware's list filter
+        # resolves the insight by short_id and the AC row lets it through.
         self._grant("dashboard", str(self.granted_dashboard.pk))
         self._login_guest()
         res = self.client.get(

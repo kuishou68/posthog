@@ -72,7 +72,6 @@ from posthog.helpers.session_cache import SessionCache
 from posthog.helpers.two_factor_session import set_two_factor_verified_in_session
 from posthog.middleware import get_impersonated_session_expires_at, is_read_only_impersonation
 from posthog.models import OrganizationMembership, Team, User, UserScenePersonalisation
-from posthog.models.guest_resource_grant import GuestResourceGrant
 from posthog.models.organization import Organization
 from posthog.models.user import NOTIFICATION_DEFAULTS, ROLE_CHOICES, Notifications, ShortcutPosition
 from posthog.permissions import APIScopePermission, TimeSensitiveActionPermission, UserNoOrgMembershipDeletePermission
@@ -261,6 +260,23 @@ class UserSerializer(serializers.ModelSerializer):
         ).exists()
 
     def get_guest_grants(self, instance: User) -> list[dict]:
+        """Build the frontend-facing grant list directly from AccessControl rows.
+
+        The AC table stores the numeric PK in `resource_id`, but the FE uses URL-style
+        identifiers (short_id for insight/notebook, PK for dashboard). We translate per
+        resource type here so the landing scene can build correct links.
+
+        Only dashboard/insight/notebook rows are exposed — these are the resource types
+        guest invites can grant. The insight rows produced by the dashboard-tile cascade are
+        intentionally filtered out so the landing scene doesn't show redundant entries for
+        every tile in a granted dashboard.
+        """
+        from posthog.models.insight import Insight
+
+        from products.notebooks.backend.models import Notebook
+
+        from ee.models.rbac.access_control import AccessControl
+
         team = instance.team
         if team is None:
             return []
@@ -273,18 +289,66 @@ class UserSerializer(serializers.ModelSerializer):
             return []
         if not membership.is_guest:
             return []
-        grants = GuestResourceGrant.objects.filter(
-            organization_membership=membership,
-        ).select_related("team")
-        return [
-            {
-                "team_id": g.team_id,
-                "team_name": g.team.name if g.team else None,
-                "resource": g.resource,
-                "resource_id": g.resource_id,
-            }
-            for g in grants
+
+        ac_rows = list(
+            AccessControl.objects.filter(
+                organization_member=membership,
+                resource__in=("dashboard", "insight", "notebook"),
+            ).select_related("team")
+        )
+
+        # Identify tile-cascade insight rows so we don't surface them as top-level grants on
+        # the landing scene — they're implied by their parent dashboard entry.
+        from products.dashboards.backend.models.dashboard_tile import DashboardTile
+
+        dashboard_pk_strs = {ac.resource_id for ac in ac_rows if ac.resource == "dashboard"}
+        tile_insight_pk_strs: set[str] = set()
+        if dashboard_pk_strs:
+            dashboard_pks = [int(p) for p in dashboard_pk_strs if p and p.isdigit()]
+            if dashboard_pks:
+                tile_insight_pk_strs = {
+                    str(pk)
+                    for pk in DashboardTile.objects.filter(
+                        dashboard_id__in=dashboard_pks, insight__isnull=False
+                    ).values_list("insight_id", flat=True)
+                    if pk is not None
+                }
+
+        # Pre-fetch short_ids for insight/notebook rows (FE links by short_id).
+        insight_ac_pks = [
+            int(ac.resource_id)
+            for ac in ac_rows
+            if ac.resource == "insight" and ac.resource_id and ac.resource_id.isdigit()
         ]
+        notebook_ac_pks = [
+            int(ac.resource_id)
+            for ac in ac_rows
+            if ac.resource == "notebook" and ac.resource_id and ac.resource_id.isdigit()
+        ]
+        insight_short_ids = dict(Insight.objects.filter(id__in=insight_ac_pks).values_list("id", "short_id"))
+        notebook_short_ids = dict(Notebook.objects.filter(id__in=notebook_ac_pks).values_list("id", "short_id"))
+
+        out: list[dict] = []
+        for ac in ac_rows:
+            if ac.resource == "insight" and ac.resource_id in tile_insight_pk_strs:
+                continue
+            resource_id_pk = ac.resource_id
+            url_id = resource_id_pk
+            if ac.resource == "insight" and resource_id_pk and resource_id_pk.isdigit():
+                url_id = insight_short_ids.get(int(resource_id_pk)) or resource_id_pk
+            elif ac.resource == "notebook" and resource_id_pk and resource_id_pk.isdigit():
+                url_id = notebook_short_ids.get(int(resource_id_pk)) or resource_id_pk
+            out.append(
+                {
+                    "team_id": ac.team_id,
+                    "team_name": ac.team.name if ac.team else None,
+                    "resource": ac.resource,
+                    "resource_id_pk": resource_id_pk,
+                    "resource_id_url": url_id,
+                    "access_level": ac.access_level,
+                }
+            )
+        return out
 
     def validate_set_current_organization(self, value: str) -> Organization:
         try:
