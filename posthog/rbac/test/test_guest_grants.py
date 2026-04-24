@@ -3,18 +3,20 @@ from posthog.test.base import BaseTest
 from rest_framework import exceptions
 
 from posthog.constants import AvailableFeature
-from posthog.models import GuestResourceGrant, OrganizationMembership
+from posthog.models import OrganizationMembership
+from posthog.models.insight import Insight
 from posthog.models.user import User
 from posthog.rbac.guest_grants import (
     GUEST_VIEWER_ACCESS_LEVEL,
     apply_invite_grants,
     create_grant,
-    delete_grant,
     promote_to_member,
+    revoke_grants_for_membership,
     validate_invite_grants,
 )
 
 from products.dashboards.backend.models.dashboard import Dashboard
+from products.dashboards.backend.models.dashboard_tile import DashboardTile
 
 from ee.models.rbac.access_control import AccessControl
 
@@ -35,8 +37,8 @@ class TestGuestGrants(BaseTest):
         )
         self.dashboard = Dashboard.objects.create(team=self.team, name="Dash")
 
-    def test_create_grant_mirrors_an_access_control_row(self) -> None:
-        grant = create_grant(
+    def test_create_grant_writes_ac_row_at_viewer_by_default(self) -> None:
+        ac = create_grant(
             membership=self.guest_membership,
             team=self.team,
             resource="dashboard",
@@ -44,38 +46,61 @@ class TestGuestGrants(BaseTest):
             created_by=self.user,
         )
 
-        self.assertEqual(grant.resource, "dashboard")
-        self.assertEqual(grant.resource_id, str(self.dashboard.pk))
-
-        ac = AccessControl.objects.get(
-            team=self.team,
-            resource="dashboard",
-            resource_id=str(self.dashboard.pk),
-            organization_member=self.guest_membership,
-        )
+        self.assertEqual(ac.resource, "dashboard")
+        self.assertEqual(ac.resource_id, str(self.dashboard.pk))
         self.assertEqual(ac.access_level, GUEST_VIEWER_ACCESS_LEVEL)
+        self.assertEqual(ac.organization_member, self.guest_membership)
 
-    def test_delete_grant_removes_access_control_row(self) -> None:
-        grant = create_grant(
+    def test_create_grant_writes_ac_row_at_editor_when_requested(self) -> None:
+        ac = create_grant(
             membership=self.guest_membership,
             team=self.team,
             resource="dashboard",
             resource_id=str(self.dashboard.pk),
             created_by=self.user,
+            access_level="editor",
         )
-        delete_grant(grant)
 
-        self.assertFalse(GuestResourceGrant.objects.filter(pk=grant.pk).exists())
-        self.assertFalse(
-            AccessControl.objects.filter(
+        self.assertEqual(ac.access_level, "editor")
+
+    def test_create_grant_rejects_invalid_access_level(self) -> None:
+        with self.assertRaises(exceptions.ValidationError):
+            create_grant(
+                membership=self.guest_membership,
                 team=self.team,
                 resource="dashboard",
                 resource_id=str(self.dashboard.pk),
-                organization_member=self.guest_membership,
-            ).exists()
+                created_by=self.user,
+                access_level="manager",  # not a guest-allowed level
+            )
+
+    def test_create_dashboard_grant_cascades_tile_insights(self) -> None:
+        insight_a = Insight.objects.create(team=self.team, name="A")
+        insight_b = Insight.objects.create(team=self.team, name="B")
+        DashboardTile.objects.create(dashboard=self.dashboard, insight=insight_a)
+        DashboardTile.objects.create(dashboard=self.dashboard, insight=insight_b)
+
+        create_grant(
+            membership=self.guest_membership,
+            team=self.team,
+            resource="dashboard",
+            resource_id=str(self.dashboard.pk),
+            created_by=self.user,
+            access_level="editor",
         )
 
-    def test_promote_to_member_removes_grants_and_flips_flag(self) -> None:
+        insight_acs = AccessControl.objects.filter(
+            team=self.team,
+            resource="insight",
+            organization_member=self.guest_membership,
+        )
+        levels = set(insight_acs.values_list("access_level", flat=True))
+        ids = set(insight_acs.values_list("resource_id", flat=True))
+        self.assertEqual(levels, {"editor"})
+        self.assertIn(str(insight_a.pk), ids)
+        self.assertIn(str(insight_b.pk), ids)
+
+    def test_revoke_deletes_all_ac_rows_for_membership(self) -> None:
         create_grant(
             membership=self.guest_membership,
             team=self.team,
@@ -92,25 +117,34 @@ class TestGuestGrants(BaseTest):
             created_by=self.user,
         )
 
+        removed = revoke_grants_for_membership(self.guest_membership)
+
+        self.assertGreaterEqual(removed, 2)
+        self.assertFalse(AccessControl.objects.filter(organization_member=self.guest_membership).exists())
+
+    def test_promote_to_member_revokes_ac_and_flips_flag(self) -> None:
+        create_grant(
+            membership=self.guest_membership,
+            team=self.team,
+            resource="dashboard",
+            resource_id=str(self.dashboard.pk),
+            created_by=self.user,
+        )
+
         removed = promote_to_member(self.guest_membership, by=self.user)
         self.guest_membership.refresh_from_db()
 
-        self.assertEqual(removed, 2)
+        self.assertGreaterEqual(removed, 1)
         self.assertFalse(self.guest_membership.is_guest)
-        self.assertFalse(GuestResourceGrant.objects.filter(organization_membership=self.guest_membership).exists())
-        self.assertFalse(
-            AccessControl.objects.filter(
-                organization_member=self.guest_membership,
-                resource="dashboard",
-            ).exists()
-        )
+        self.assertFalse(self.guest_membership.bypass_sso)
+        self.assertFalse(AccessControl.objects.filter(organization_member=self.guest_membership).exists())
 
     def test_promote_to_member_rejects_non_guest(self) -> None:
         regular = OrganizationMembership.objects.get(organization=self.organization, user=self.user)
         with self.assertRaises(exceptions.ValidationError):
             promote_to_member(regular, by=self.user)
 
-    def test_apply_invite_grants_creates_rows_for_each_entry(self) -> None:
+    def test_apply_invite_grants_creates_ac_rows_for_each_entry(self) -> None:
         class _FakeInvite:
             guest_resources = [
                 {"team_id": self.team.pk, "resource": "dashboard", "resource_id": str(self.dashboard.pk)},
@@ -120,19 +154,33 @@ class TestGuestGrants(BaseTest):
         created = apply_invite_grants(_FakeInvite(), self.guest_membership)
         self.assertEqual(len(created), 1)
         self.assertTrue(
-            GuestResourceGrant.objects.filter(
-                organization_membership=self.guest_membership,
-                resource="dashboard",
-                resource_id=str(self.dashboard.pk),
-            ).exists()
-        )
-        self.assertTrue(
             AccessControl.objects.filter(
                 organization_member=self.guest_membership,
                 resource="dashboard",
                 resource_id=str(self.dashboard.pk),
+                access_level=GUEST_VIEWER_ACCESS_LEVEL,
             ).exists()
         )
+
+    def test_apply_invite_grants_respects_per_entry_access_level(self) -> None:
+        class _FakeInvite:
+            guest_resources = [
+                {
+                    "team_id": self.team.pk,
+                    "resource": "dashboard",
+                    "resource_id": str(self.dashboard.pk),
+                    "access_level": "editor",
+                },
+            ]
+            created_by = self.user
+
+        apply_invite_grants(_FakeInvite(), self.guest_membership)
+        ac = AccessControl.objects.get(
+            organization_member=self.guest_membership,
+            resource="dashboard",
+            resource_id=str(self.dashboard.pk),
+        )
+        self.assertEqual(ac.access_level, "editor")
 
     def test_validate_invite_grants_requires_access_control_feature(self) -> None:
         self.organization.available_product_features = []

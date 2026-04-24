@@ -3,7 +3,7 @@ from posthog.test.base import APIBaseTest
 from rest_framework import status
 
 from posthog.constants import AvailableFeature
-from posthog.models import GuestResourceGrant, OrganizationInvite, OrganizationMembership
+from posthog.models import OrganizationInvite, OrganizationMembership
 from posthog.models.user import User
 
 from products.dashboards.backend.models.dashboard import Dashboard
@@ -98,10 +98,6 @@ class TestOrganizationInviteGuest(APIBaseTest):
         membership = OrganizationMembership.objects.get(organization=self.organization, user=invitee)
         self.assertTrue(membership.is_guest)
 
-        grant = GuestResourceGrant.objects.get(organization_membership=membership)
-        self.assertEqual(grant.resource, "dashboard")
-        self.assertEqual(grant.resource_id, str(self.dashboard.pk))
-
         self.assertTrue(
             AccessControl.objects.filter(
                 organization_member=membership,
@@ -126,7 +122,7 @@ class TestOrganizationInviteGuest(APIBaseTest):
 
         membership = OrganizationMembership.objects.get(organization=self.organization, user=invitee)
         self.assertFalse(membership.is_guest)
-        self.assertFalse(GuestResourceGrant.objects.filter(organization_membership=membership).exists())
+        self.assertFalse(AccessControl.objects.filter(organization_member=membership).exists())
 
     def test_accepting_invite_with_bypass_sso_sets_membership_flag(self) -> None:
         res = self.client.post(

@@ -2,7 +2,7 @@ from posthog.test.base import APIBaseTest
 
 from rest_framework import status
 
-from posthog.models import GuestResourceGrant, OrganizationMembership
+from posthog.models import OrganizationMembership
 from posthog.models.activity_logging.activity_log import ActivityLog
 from posthog.models.user import User
 from posthog.rbac.guest_grants import create_grant
@@ -50,7 +50,6 @@ class TestPromoteGuest(APIBaseTest):
         self.assertFalse(self.guest_membership.is_guest)
         self.assertEqual(res.json()["removed_grants"], 1)
 
-        self.assertFalse(GuestResourceGrant.objects.filter(organization_membership=self.guest_membership).exists())
         self.assertFalse(
             AccessControl.objects.filter(
                 organization_member=self.guest_membership,

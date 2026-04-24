@@ -1,13 +1,12 @@
-"""Central service for creating, deleting, and mirroring guest grants.
+"""Guest grants service.
 
-Every write path goes through here. Each `GuestResourceGrant` row is paired with an
-`AccessControl` row at `access_level="viewer"` so the existing AC machinery resolves
-the guest's access on granted resources without any guest-specific AC branches —
-this is the "mirror" that lets us avoid patching `user_access_control.py` and friends.
+A guest's access is expressed as `AccessControl` rows scoped to their OrganizationMembership.
+The inversion in `UserAccessControl` flips the default for guests from "allow" to "deny", so
+an AC row is both necessary and sufficient: this module is a thin wrapper around AC writes
+plus the dashboard-tile cascade.
 
-Adding a new resource type means accepting it in the grant table and letting the
-middleware's rule for that type fire; no code here needs changing unless the AC
-`resource` string differs from the grant `resource` string.
+Adding a new resource type means accepting it in `VALID_RESOURCES` and ensuring the
+`_ac_resource_id` translation matches how the URL-side identifier differs from the AC PK.
 """
 
 from typing import Any
@@ -17,7 +16,7 @@ from django.db import transaction
 from rest_framework import exceptions
 
 from posthog.constants import AvailableFeature
-from posthog.models import GuestResourceGrant, OrganizationMembership
+from posthog.models import OrganizationMembership
 from posthog.models.activity_logging.activity_log import Change, Detail, log_activity
 from posthog.models.insight import Insight
 from posthog.models.organization import Organization
@@ -31,6 +30,7 @@ from products.notebooks.backend.models import Notebook
 from ee.models.rbac.access_control import AccessControl
 
 VALID_RESOURCES: tuple[str, ...] = ("dashboard", "insight", "notebook")
+VALID_GUEST_ACCESS_LEVELS: tuple[str, ...] = ("viewer", "editor")
 GUEST_VIEWER_ACCESS_LEVEL = "viewer"
 
 
@@ -60,7 +60,9 @@ def _resource_exists_in_team(resource: str, resource_id: str, team_id: int) -> b
 def validate_invite_grants(organization: Organization, guest_resources: list[dict[str, Any]]) -> None:
     """Validate the shape and existence of each entry in an invite's `guest_resources`.
 
-    Raises `ValidationError` with a caller-friendly message on the first failure.
+    The structural validation of `access_level` is handled by the field-level validator on
+    `OrganizationInvite.guest_resources` (see `posthog/models/organization_invite.py`) — this
+    service-level validator only checks team membership and resource existence.
     """
     if not organization.is_feature_available(AvailableFeature.ACCESS_CONTROL):
         raise exceptions.ValidationError(
@@ -95,45 +97,54 @@ def create_grant(
     resource: str,
     resource_id: str,
     created_by: User,
-) -> GuestResourceGrant:
-    """Create a `GuestResourceGrant` plus its mirroring `AccessControl` row at viewer access."""
+    access_level: str = GUEST_VIEWER_ACCESS_LEVEL,
+) -> AccessControl:
+    """Write a single `AccessControl` row for this guest membership.
+
+    For dashboards, also cascade AC rows at the same level to each tile insight so the
+    insight scene resolves correctly on the frontend. Tiles added after the grant is created
+    will NOT auto-propagate — documented v1 limitation.
+    """
     if resource not in VALID_RESOURCES:
         raise exceptions.ValidationError(f"Invalid resource: {resource}")
-
-    grant = GuestResourceGrant.objects.create(
-        organization_membership=membership,
-        team=team,
-        resource=resource,
-        resource_id=str(resource_id),
-        created_by=created_by,
-    )
+    if access_level not in VALID_GUEST_ACCESS_LEVELS:
+        raise exceptions.ValidationError(
+            f"Invalid access level '{access_level}'. Must be one of: {', '.join(VALID_GUEST_ACCESS_LEVELS)}."
+        )
 
     ac_resource_id = _ac_resource_id(resource, str(resource_id), team.id)
-    if ac_resource_id is not None:
-        AccessControl.objects.get_or_create(
-            team=team,
-            resource=resource,
-            resource_id=ac_resource_id,
-            organization_member=membership,
-            role=None,
-            defaults={"access_level": GUEST_VIEWER_ACCESS_LEVEL, "created_by": created_by},
-        )
-    # Dashboard grants cascade viewer AC to each tile insight at grant time so the
-    # insight scene resolves user_access_level="viewer" naturally. Tiles added later
-    # won't auto-propagate; accept as a v1 limitation.
+    if ac_resource_id is None:
+        raise exceptions.ValidationError(f"{resource.capitalize()} {resource_id} does not exist in team {team.id}.")
+
+    access_control, _ = AccessControl.objects.get_or_create(
+        team=team,
+        resource=resource,
+        resource_id=ac_resource_id,
+        organization_member=membership,
+        role=None,
+        defaults={"access_level": access_level, "created_by": created_by},
+    )
+    # Keep the level up-to-date if a grant for this resource already existed (e.g. an admin
+    # re-runs the same invite with a higher level). `get_or_create` above short-circuits in
+    # that case, so bump the level defensively.
+    if access_control.access_level != access_level:
+        access_control.access_level = access_level
+        access_control.save(update_fields=["access_level", "updated_at"])
+
     if resource == "dashboard":
         _cascade_ac_to_dashboard_tiles(
             team=team,
             dashboard_id=str(resource_id),
             membership=membership,
             created_by=created_by,
+            access_level=access_level,
         )
 
-    return grant
+    return access_control
 
 
 def _ac_resource_id(resource: str, grant_resource_id: str, team_id: int) -> str | None:
-    """Guest grants use URL identifiers (numeric PK for dashboards, short_id for
+    """Guest grants accept URL identifiers (numeric PK for dashboards, short_id for
     insights/notebooks), while the AC table uses the numeric PK for all resources.
     Translate before writing AC rows."""
     if resource == "dashboard":
@@ -152,7 +163,12 @@ def _ac_resource_id(resource: str, grant_resource_id: str, team_id: int) -> str 
 
 
 def _cascade_ac_to_dashboard_tiles(
-    *, team: Team, dashboard_id: str, membership: OrganizationMembership, created_by: User
+    *,
+    team: Team,
+    dashboard_id: str,
+    membership: OrganizationMembership,
+    created_by: User,
+    access_level: str,
 ) -> None:
     if not dashboard_id.isdigit():
         return
@@ -168,43 +184,27 @@ def _cascade_ac_to_dashboard_tiles(
             resource_id=str(pk),
             organization_member=membership,
             role=None,
-            defaults={"access_level": GUEST_VIEWER_ACCESS_LEVEL, "created_by": created_by},
+            defaults={"access_level": access_level, "created_by": created_by},
         )
 
 
 @transaction.atomic
-def delete_grant(grant: GuestResourceGrant) -> None:
-    """Delete a grant and the AC rows that mirror it."""
-    ac_resource_id = _ac_resource_id(grant.resource, grant.resource_id, grant.team_id)
-    if ac_resource_id is not None:
-        AccessControl.objects.filter(
-            team=grant.team,
-            resource=grant.resource,
-            resource_id=ac_resource_id,
-            organization_member_id=grant.organization_membership_id,
-        ).delete()
-    if grant.resource == "dashboard" and grant.resource_id.isdigit():
-        tile_insight_pks = DashboardTile.objects.filter(
-            dashboard_id=int(grant.resource_id), insight__isnull=False
-        ).values_list("insight_id", flat=True)
-        AccessControl.objects.filter(
-            team=grant.team,
-            resource="insight",
-            resource_id__in=[str(pk) for pk in tile_insight_pks if pk is not None],
-            organization_member_id=grant.organization_membership_id,
-        ).delete()
-    grant.delete()
+def revoke_grants_for_membership(membership: OrganizationMembership) -> int:
+    """Delete every AC row tied to this guest membership. Returns the number of rows removed."""
+    deleted, _ = AccessControl.objects.filter(organization_member=membership).delete()
+    return int(deleted)
 
 
 @transaction.atomic
 def apply_invite_grants(
     invite: "Any",  # OrganizationInvite — annotated as Any to avoid a circular import
     new_membership: OrganizationMembership,
-) -> list[GuestResourceGrant]:
-    """Materialize an invite's `guest_resources` into active grants for a new membership."""
-    created: list[GuestResourceGrant] = []
+) -> list[AccessControl]:
+    """Materialize an invite's `guest_resources` into AccessControl rows on the new membership."""
+    created: list[AccessControl] = []
     for entry in invite.guest_resources or []:
         team = Team.objects.get(id=entry["team_id"])
+        access_level = entry.get("access_level", GUEST_VIEWER_ACCESS_LEVEL)
         created.append(
             create_grant(
                 membership=new_membership,
@@ -212,6 +212,7 @@ def apply_invite_grants(
                 resource=entry["resource"],
                 resource_id=str(entry["resource_id"]),
                 created_by=invite.created_by,
+                access_level=access_level,
             )
         )
     return created
@@ -221,16 +222,13 @@ def apply_invite_grants(
 def promote_to_member(membership: OrganizationMembership, by: User) -> int:
     """Convert a guest membership into a regular member.
 
-    Deletes all grants + mirroring AC rows and flips `is_guest` to False.
-    Returns the number of grants removed.
+    Deletes all AC rows owned by this membership and flips `is_guest` (and the SSO carve-out)
+    off. Returns the number of AC rows removed so the API response can surface it.
     """
     if not membership.is_guest:
         raise exceptions.ValidationError("This membership is already a regular member.")
 
-    grants = list(GuestResourceGrant.objects.filter(organization_membership=membership))
-    removed = len(grants)
-    for grant in grants:
-        delete_grant(grant)
+    removed = revoke_grants_for_membership(membership)
 
     # Reset SSO bypass on promotion — the carve-out was granted for a guest scenario;
     # elevating to full member should require re-granting if the admin still wants it.

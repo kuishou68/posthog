@@ -207,6 +207,9 @@ class OrganizationInvite(ModelActivityMixin, UUIDTModel):
         if self.is_guest_invite:
             # Guest memberships live alongside regular ones; their access is gated entirely by
             # GuestResourceGrant rows (plus the mirroring AccessControl rows created below).
+            # Guest memberships live alongside regular ones; their access is governed entirely
+            # by AccessControl rows (written below via `apply_invite_grants`). The AC layer's
+            # default for is_guest=True is "deny", so a guest with no AC rows has no access.
             new_membership.is_guest = True
             membership_updates.append("is_guest")
 
