@@ -471,6 +471,7 @@ expose = [
     "backend\\.facade.*",
     "backend\\.presentation\\.views.*",
     "backend\\.presentation\\.experiments.*",
+    "backend\\.presentation\\.saved_metrics.*",
 ]
 from = [
     "products\\.(experiments|mcp_store|notifications|visual_review|tracing|metrics|mcp_analytics|platform_features)",
