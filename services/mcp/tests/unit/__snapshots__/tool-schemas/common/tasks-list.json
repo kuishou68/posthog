@@ -32,9 +32,18 @@
             "minLength": 1,
             "type": "string"
         },
+        "search": {
+            "description": "Case-insensitive substring search over task title and description. A numeric value also matches the task number. An empty value disables the filter.",
+            "type": "string"
+        },
         "stage": {
             "description": "Filter by task run stage",
             "minLength": 1,
+            "type": "string"
+        },
+        "status": {
+            "description": "Filter tasks by the status of their most recent run.\n\n* `not_started` - not_started\n* `queued` - queued\n* `in_progress` - in_progress\n* `completed` - completed\n* `failed` - failed\n* `cancelled` - cancelled",
+            "enum": ["not_started", "queued", "in_progress", "completed", "failed", "cancelled"],
             "type": "string"
         }
     },
