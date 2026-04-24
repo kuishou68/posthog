@@ -5,10 +5,11 @@ from parameterized import parameterized
 from rest_framework.exceptions import NotFound
 
 from posthog.constants import AvailableFeature
-from posthog.models import GuestResourceGrant, OrganizationMembership
+from posthog.models import OrganizationMembership
 from posthog.models.insight import Insight
 from posthog.models.user import User
 from posthog.rbac._generated_guest_overridable import GUEST_OVERRIDABLE_FIELDS
+from posthog.rbac.guest_grants import create_grant
 from posthog.rbac.guest_query_scope import rescope_guest_query, user_is_guest
 
 from products.dashboards.backend.models.dashboard import Dashboard
@@ -107,11 +108,13 @@ class TestRescopeGuestQuery(BaseTest):
             name="DAUs",
             query=self.saved_trends_query,
         )
-        GuestResourceGrant.objects.create(
-            organization_membership=self.guest_membership,
+        create_grant(
+            membership=self.guest_membership,
             team=self.team,
             resource="insight",
             resource_id=self.insight.short_id,
+            created_by=self.user,
+            access_level="viewer",
         )
 
     def test_matching_kind_discards_malicious_series(self) -> None:
@@ -250,11 +253,15 @@ class TestRescopeGuestQueryDashboardGrant(BaseTest):
             },
         )
         DashboardTile.objects.create(dashboard=self.dashboard, insight=self.tile_insight)
-        GuestResourceGrant.objects.create(
-            organization_membership=self.guest_membership,
+        # create_grant cascades an AC row to each tile insight, so the guest can
+        # address a tile via the dashboard scene resource.
+        create_grant(
+            membership=self.guest_membership,
             team=self.team,
             resource="dashboard",
             resource_id=str(self.dashboard.pk),
+            created_by=self.user,
+            access_level="viewer",
         )
 
     def test_dashboard_grant_requires_tile_insight_short_id_header(self) -> None:

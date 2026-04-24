@@ -30,9 +30,11 @@ from typing import Any
 from rest_framework.exceptions import NotFound
 from rest_framework.request import Request
 
-from posthog.models import GuestResourceGrant, OrganizationMembership
+from posthog.models import OrganizationMembership
 from posthog.models.insight import Insight
 from posthog.rbac._generated_guest_overridable import GUEST_OVERRIDABLE_FIELDS
+
+from ee.models.rbac.access_control import AccessControl
 
 SCENE_RESOURCE_HEADER = "X-PostHog-Scene-Resource"
 
@@ -102,21 +104,28 @@ def _load_insight_for_grant(user, resource_type: str, resource_id: str, request:
     `client_query_id`-adjacent payload; we verify that short_id belongs to a
     tile of the granted dashboard before using it.
     """
-    grants = GuestResourceGrant.objects.filter(
-        organization_membership__user=user,
-        organization_membership__is_guest=True,
+    # The header carries URL-style identifiers (short_id for insights, numeric
+    # PK for dashboards). The AC table stores numeric PKs for all resources, so
+    # insight short_ids must be translated before the AC lookup.
+    ac_resource_id = _header_to_ac_resource_id(resource_type, resource_id)
+    if ac_resource_id is None:
+        return None
+
+    grant_exists = AccessControl.objects.filter(
+        organization_member__user=user,
+        organization_member__is_guest=True,
         resource=resource_type,
-        resource_id=resource_id,
-    )
-    if not grants.exists():
+        resource_id=ac_resource_id,
+    ).exists()
+    if not grant_exists:
         return None
 
     if resource_type == "insight":
         return Insight.objects.filter(short_id=resource_id, deleted=False).first()
 
-    # dashboard grant — tile insight is named in the body via a sibling header
-    # or in an FE-supplied field. Prefer an explicit tile short_id from the
-    # request (header or body) over blindly picking a tile.
+    # dashboard grant — tile insight is named in a sibling header alongside the
+    # dashboard scene resource. Verify that short_id belongs to a tile of the
+    # granted dashboard before using it.
     tile_short_id = _tile_short_id_from_request(request)
     if not tile_short_id or not resource_id.isdigit():
         return None
@@ -130,6 +139,23 @@ def _load_insight_for_grant(user, resource_type: str, resource_id: str, request:
         .distinct()
         .first()
     )
+
+
+def _header_to_ac_resource_id(resource_type: str, header_resource_id: str) -> str | None:
+    """Translate a URL-style identifier from the scene-resource header into the
+    numeric-PK form that `AccessControl.resource_id` stores.
+
+    Dashboards are addressed by numeric PK on both sides, so no translation.
+    Insights are addressed by short_id in the header; look up the PK.
+    """
+    if resource_type == "dashboard":
+        return header_resource_id if header_resource_id.isdigit() else None
+    if resource_type == "insight":
+        if header_resource_id.isdigit():
+            return header_resource_id
+        pk = Insight.objects.filter(short_id=header_resource_id).values_list("id", flat=True).first()
+        return str(pk) if pk is not None else None
+    return None
 
 
 def _tile_short_id_from_request(request: Request) -> str | None:
