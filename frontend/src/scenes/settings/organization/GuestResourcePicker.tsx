@@ -12,6 +12,12 @@ import { teamLogic } from 'scenes/teamLogic'
 import { GuestInviteGrant, inviteLogic } from './inviteLogic'
 
 type ResourceType = 'dashboard' | 'insight' | 'notebook'
+type GrantAccessLevel = 'viewer' | 'editor'
+
+const ACCESS_LEVEL_OPTIONS: { value: GrantAccessLevel; label: string }[] = [
+    { value: 'viewer', label: 'Viewer' },
+    { value: 'editor', label: 'Editor' },
+]
 
 function useResourceOptions(resourceType: ResourceType): { options: LemonInputSelectOption[]; loading: boolean } {
     const [options, setOptions] = useState<LemonInputSelectOption[]>([])
@@ -76,7 +82,7 @@ function useResourceOptions(resourceType: ResourceType): { options: LemonInputSe
 
 export function GuestResourcePicker(): JSX.Element {
     const { guestGrants } = useValues(inviteLogic)
-    const { addGuestGrant, removeGuestGrant } = useActions(inviteLogic)
+    const { addGuestGrant, removeGuestGrant, setGuestGrantAccessLevel } = useActions(inviteLogic)
     const { currentTeamId } = useValues(teamLogic)
 
     const [resourceType, setResourceType] = useState<ResourceType>('dashboard')
@@ -98,6 +104,7 @@ export function GuestResourcePicker(): JSX.Element {
             resource: resourceType,
             resource_id: key,
             label: typeof option.label === 'string' ? option.label : key,
+            // access_level omitted — reducer defaults to viewer.
         })
         setSelectedKey([])
     }
@@ -150,6 +157,18 @@ export function GuestResourcePicker(): JSX.Element {
                         <div key={i} className="flex items-center gap-2 p-2 bg-bg-light rounded border">
                             <span className="text-xs text-muted capitalize">{grant.resource}</span>
                             <span className="flex-1 text-sm">{grant.label || grant.resource_id}</span>
+                            <LemonSelect<GrantAccessLevel>
+                                size="small"
+                                className="bg-bg-light"
+                                options={ACCESS_LEVEL_OPTIONS}
+                                value={grant.access_level}
+                                onChange={(level) => {
+                                    if (level) {
+                                        setGuestGrantAccessLevel(i, level)
+                                    }
+                                }}
+                                data-attr={`guest-grant-access-level-${i}`}
+                            />
                             <LemonButton
                                 size="small"
                                 icon={<IconTrash />}

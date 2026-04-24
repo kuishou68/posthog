@@ -13,13 +13,21 @@ import { AccessControlLevel, OrganizationInviteType } from '~/types'
 
 import type { inviteLogicType } from './inviteLogicType'
 
-/** Grant the guest invite will materialize on acceptance. Mirrors `GuestResourceGrant`. */
+/** Grant the guest invite will materialize on acceptance. Mirrors one entry of
+ *  `OrganizationInvite.guest_resources`. */
 export interface GuestInviteGrant {
     team_id: number
     resource: 'dashboard' | 'insight' | 'notebook'
     resource_id: string
+    /** Per-resource access level. Defaults to viewer when the admin adds a grant. */
+    access_level: 'viewer' | 'editor'
     /** Display label for the UI only; not sent to the server. */
     label?: string
+}
+
+/** Shape accepted by `addGuestGrant` — access_level is optional and defaults to viewer. */
+export type GuestInviteGrantInput = Omit<GuestInviteGrant, 'access_level'> & {
+    access_level?: 'viewer' | 'editor'
 }
 
 /** State of a single invite row (with input data) in bulk invite creation. */
@@ -62,8 +70,9 @@ export const inviteLogic = kea<inviteLogicType>([
         }),
         removeProjectAccess: (inviteIndex: number, projectId: number) => ({ inviteIndex, projectId }),
         setIsGuestInvite: (isGuest: boolean) => ({ isGuest }),
-        addGuestGrant: (grant: GuestInviteGrant) => ({ grant }),
+        addGuestGrant: (grant: GuestInviteGrantInput) => ({ grant }),
         removeGuestGrant: (index: number) => ({ index }),
+        setGuestGrantAccessLevel: (index: number, access_level: 'viewer' | 'editor') => ({ index, access_level }),
         setBypassSsoEnforcement: (bypass: boolean) => ({ bypass }),
         resetGuestState: true,
     }),
@@ -89,6 +98,7 @@ export const inviteLogic = kea<inviteLogicType>([
                                 team_id: g.team_id,
                                 resource: g.resource,
                                 resource_id: g.resource_id,
+                                access_level: g.access_level,
                             })),
                             bypass_sso: values.bypassSsoEnforcement,
                         }
@@ -236,8 +246,13 @@ export const inviteLogic = kea<inviteLogicType>([
         guestGrants: [
             [] as GuestInviteGrant[],
             {
-                addGuestGrant: (state, { grant }) => [...state, grant],
+                addGuestGrant: (state, { grant }) => [
+                    ...state,
+                    { ...grant, access_level: grant.access_level ?? 'viewer' },
+                ],
                 removeGuestGrant: (state, { index }) => state.filter((_, i) => i !== index),
+                setGuestGrantAccessLevel: (state, { index, access_level }) =>
+                    state.map((grant, i) => (i === index ? { ...grant, access_level } : grant)),
                 resetGuestState: () => [],
                 inviteTeamMembersSuccess: () => [],
             },

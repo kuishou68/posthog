@@ -74,4 +74,82 @@ describe('inviteLogic (guest invites)', () => {
             level: 1,
         })
     })
+
+    describe('per-grant access_level', () => {
+        it('addGuestGrant defaults access_level to viewer when omitted', async () => {
+            inviteLogic.actions.addGuestGrant({
+                team_id: 1,
+                resource: 'dashboard',
+                resource_id: '42',
+                label: 'KPIs',
+            })
+            await expectLogic(inviteLogic).toMatchValues({
+                guestGrants: [
+                    expect.objectContaining({
+                        resource: 'dashboard',
+                        resource_id: '42',
+                        access_level: 'viewer',
+                    }),
+                ],
+            })
+        })
+
+        it('addGuestGrant honors an explicit editor access_level', async () => {
+            inviteLogic.actions.addGuestGrant({
+                team_id: 1,
+                resource: 'dashboard',
+                resource_id: '42',
+                label: 'KPIs',
+                access_level: 'editor',
+            })
+            await expectLogic(inviteLogic).toMatchValues({
+                guestGrants: [expect.objectContaining({ access_level: 'editor' })],
+            })
+        })
+
+        it('setGuestGrantAccessLevel updates an existing grant in place', async () => {
+            inviteLogic.actions.addGuestGrant({
+                team_id: 1,
+                resource: 'dashboard',
+                resource_id: '42',
+            })
+            inviteLogic.actions.addGuestGrant({
+                team_id: 1,
+                resource: 'insight',
+                resource_id: 'abc',
+            })
+
+            inviteLogic.actions.setGuestGrantAccessLevel(1, 'editor')
+
+            await expectLogic(inviteLogic).toMatchValues({
+                guestGrants: [
+                    expect.objectContaining({ resource: 'dashboard', access_level: 'viewer' }),
+                    expect.objectContaining({ resource: 'insight', access_level: 'editor' }),
+                ],
+            })
+        })
+
+        it('switching resource type while editing grants does not drop access_level', async () => {
+            // Simulates the flow where the admin adds an editor-level grant, then adds another
+            // grant of a different resource type. The first grant's access_level must survive.
+            inviteLogic.actions.addGuestGrant({
+                team_id: 1,
+                resource: 'dashboard',
+                resource_id: '42',
+                access_level: 'editor',
+            })
+            inviteLogic.actions.addGuestGrant({
+                team_id: 1,
+                resource: 'insight',
+                resource_id: 'abc',
+            })
+
+            await expectLogic(inviteLogic).toMatchValues({
+                guestGrants: [
+                    expect.objectContaining({ resource: 'dashboard', access_level: 'editor' }),
+                    expect.objectContaining({ resource: 'insight', access_level: 'viewer' }),
+                ],
+            })
+        })
+    })
 })
