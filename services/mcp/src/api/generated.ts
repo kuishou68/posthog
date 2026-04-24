@@ -17663,7 +17663,17 @@ export namespace Schemas {
       ref?: string | null;
       /** @nullable */
       href?: string | null;
+      /**
+       * @minimum -2147483648
+       * @maximum 2147483647
+       */
+      order?: number;
       readonly created_at: string;
+    }
+
+    export interface FileSystemShortcutReorder {
+      /** IDs of the current user's shortcuts in the desired display order. */
+      ordered_ids: string[];
     }
 
     export interface FlagValueItem {
@@ -27042,6 +27052,11 @@ export namespace Schemas {
       ref?: string | null;
       /** @nullable */
       href?: string | null;
+      /**
+       * @minimum -2147483648
+       * @maximum 2147483647
+       */
+      order?: number;
       readonly created_at?: string;
     }
 
