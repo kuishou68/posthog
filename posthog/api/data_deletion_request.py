@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
@@ -12,6 +12,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.serializers import BaseSerializer
 
 from posthog.admin.admins.data_deletion_request_admin import (
     _build_event_filter,
@@ -26,6 +27,7 @@ from posthog.clickhouse.query_tagging import Feature, Product, tags_context
 from posthog.clickhouse.workload import Workload
 from posthog.models.activity_logging.activity_log import Detail, log_activity
 from posthog.models.data_deletion_request import DataDeletionRequest, RequestStatus, RequestType
+from posthog.models.user import User
 from posthog.permissions import TeamMemberStrictManagementPermission
 
 PREVIEW_SAMPLE_LIMIT = 3000
@@ -276,12 +278,12 @@ class DataDeletionRequestViewSet(
             # 404 (not 403) so teams without the flag can't infer the endpoint exists.
             raise NotFound()
 
-    def perform_create(self, serializer: DataDeletionRequestSerializer) -> None:
+    def perform_create(self, serializer: BaseSerializer[Any]) -> None:
         instance = serializer.save()
         log_activity(
             organization_id=self.organization.id,
             team_id=self.team_id,
-            user=self.request.user,
+            user=cast(User, self.request.user),
             was_impersonated=is_impersonated_session(self.request),
             scope="DataManagement",
             item_id=instance.pk,
@@ -297,7 +299,7 @@ class DataDeletionRequestViewSet(
         log_activity(
             organization_id=self.organization.id,
             team_id=self.team_id,
-            user=self.request.user,
+            user=cast(User, self.request.user),
             was_impersonated=is_impersonated_session(self.request),
             scope="DataManagement",
             item_id=instance.pk,
