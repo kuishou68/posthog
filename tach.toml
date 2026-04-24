@@ -219,6 +219,8 @@ depends_on = [
     "ee",
     "posthog",
     "products.event_definitions",
+    "products.product_tours",
+    "products.surveys",
 ]
 layer = "modules"
 
@@ -468,6 +470,7 @@ layer = "modules"
 expose = [
     "backend\\.facade.*",
     "backend\\.presentation\\.views.*",
+    "backend\\.presentation\\.experiments.*",
 ]
 from = [
     "products\\.(experiments|mcp_store|notifications|visual_review|tracing|metrics|mcp_analytics|platform_features)",
