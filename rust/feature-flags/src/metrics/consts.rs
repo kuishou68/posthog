@@ -38,11 +38,106 @@ pub const DB_CONNECTION_POOL_IDLE_COUNTER: &str = "flags_db_connection_pool_idle
 pub const DB_CONNECTION_POOL_MAX_COUNTER: &str = "flags_db_connection_pool_max_total";
 pub const DB_CONNECTION_POOL_SIZE_GAUGE: &str = "flags_db_connection_pool_size";
 
-// Flag billing timing
-// Duration of the Redis HINCRBY billing increment call. Labeled by
-// `outcome` ("ok" | "timeout" | "error") to isolate the happy path from
-// Redis timeouts — closes a sub-metric blind spot on the billing path.
-pub const FLAG_BILLING_INCREMENT_TIME: &str = "flags_billing_increment_time_ms";
+// Billing aggregator metrics
+// See `src/billing/aggregator.rs`. The accounting identity
+//   records_total ≈ entries_flushed_total + capped_drops_total
+//                  + flush_dropped_on_error_total + shutdown_flush_dropped_total
+//                  + pending_entries[end]
+// should hold per pod over any window.
+
+// Counter, labeled by `request_type` ("decide" | "flag_definitions").
+pub const BILLING_AGGREGATOR_RECORDS: &str = "billing_aggregator_records_total";
+
+// Counter: sum of `count` args across all successfully written HINCRBYs.
+pub const BILLING_AGGREGATOR_ENTRIES_FLUSHED: &str = "billing_aggregator_entries_flushed_total";
+
+// Gauge of the live `pending` map size. See `billing::aggregator` module
+// docs for how to correlate this with `consecutive_flush_failures` and
+// `seconds_since_successful_flush` to detect a wedged flusher.
+pub const BILLING_AGGREGATOR_PENDING_ENTRIES: &str = "billing_aggregator_pending_entries";
+
+// Gauge of the sum of all per-key counts in the live `pending` map (as
+// opposed to `pending_entries`, which is the number of unique keys).
+// Surfaces unbounded count growth on existing keys during a sustained
+// Redis outage — the pending-entry cap blocks new keys but does not
+// bound counts on keys already present, so this is the signal that
+// distinguishes "Redis flapping briefly" from "Redis has been down long
+// enough that we are absorbing a meaningful billing backlog."
+pub const BILLING_AGGREGATOR_PENDING_COUNTS: &str = "billing_aggregator_pending_counts";
+
+// Gauge of `in_flight_uncredited` — the count drained from `pending` but
+// not yet credited to `entries_flushed_total` or `flush_dropped_on_error_total`.
+pub const BILLING_AGGREGATOR_IN_FLIGHT: &str = "billing_aggregator_in_flight";
+
+// Gauge: seconds elapsed since the last successful flush (0 until the
+// first successful flush completes).
+pub const BILLING_AGGREGATOR_SECONDS_SINCE_SUCCESSFUL_FLUSH: &str =
+    "billing_aggregator_seconds_since_successful_flush";
+
+pub const BILLING_AGGREGATOR_FLUSH_DURATION_MS: &str = "billing_aggregator_flush_duration_ms";
+
+// Histogram of per-call `record()` latency in microseconds, with no labels
+// to keep the hot-path emission allocation-free. The expected uncontended
+// p50 is sub-microsecond (one atomic increment + a hash + a HashMap entry
+// op). p99 climbing while p50 stays flat is the canonical signature of
+// `pending` mutex contention — this metric is the sole signal for it, since
+// `record()` would otherwise be invisible to monitoring.
+pub const BILLING_AGGREGATOR_RECORD_DURATION_US: &str = "billing_aggregator_record_duration_us";
+
+// Counter: flusher-side Redis failures, labeled by `error_type`
+// ("timeout" | "transport" | "other").
+pub const BILLING_AGGREGATOR_FLUSH_ERRORS: &str = "billing_aggregator_flush_errors_total";
+
+// Gauge: consecutive failed flushes. Catches a wedged flusher before the
+// pending-entries cap fires. Alert at >= 3.
+pub const BILLING_AGGREGATOR_CONSECUTIVE_FLUSH_FAILURES: &str =
+    "billing_aggregator_consecutive_flush_failures";
+
+// Counter. Tripwire — a non-zero rate is an incident signal.
+pub const BILLING_AGGREGATOR_CAPPED_DROPS: &str = "billing_aggregator_capped_drops_total";
+
+// Counter: entries lost during shutdown because the final flush timed out
+// or panicked. SIGKILL past the grace window lands here.
+pub const BILLING_AGGREGATOR_SHUTDOWN_FLUSH_DROPPED: &str =
+    "billing_aggregator_shutdown_flush_dropped_total";
+
+// Counter: entries drained from the pending map that were lost because a
+// flush chunk errored AND the flush policy couldn't retry. In practice this
+// only increments on the shutdown path (`BestEffort`), where the process is
+// exiting and there is no next tick to retry on. Normal ticks
+// (`BailOnError`) re-queue failed entries into `pending` and report them
+// via `billing_aggregator_flush_requeued_total` instead.
+pub const BILLING_AGGREGATOR_FLUSH_DROPPED_ON_ERROR: &str =
+    "billing_aggregator_flush_dropped_on_error_total";
+
+// Counter: aggregated request count that failed to flush and was merged
+// back into `pending` for retry on the next tick. Unlike
+// `flush_dropped_on_error_total`, these counts are NOT lost — they remain
+// in the aggregator and will be retried. A sustained rate combined with a
+// growing `pending_entries` gauge is the signal that Redis is unhealthy
+// and the aggregator is absorbing the outage.
+pub const BILLING_AGGREGATOR_FLUSH_REQUEUED: &str = "billing_aggregator_flush_requeued_total";
+
+// Counter: numeric saturation sentinel for billing counts. Two trigger
+// paths, both physically unreachable at realistic per-pod RPS:
+//   1. Flush path: per-key `u64` count exceeded `i64::MAX` and was clamped
+//      before the `HINCRBY`. Means `entries_flushed_total` is overcounting
+//      relative to what Redis received.
+//   2. Record path: per-key `u64` count would have wrapped on `+= 1` and
+//      the increment was dropped. Means a record() call did not contribute
+//      to a future flush.
+// Any non-zero rate is an incident signal regardless of which path fired
+// it — the alert response is the same (something is very wrong upstream).
+pub const BILLING_AGGREGATOR_COUNT_SATURATED: &str = "billing_aggregator_count_saturated_total";
+
+// Legacy compatibility shim: emitted alongside `billing_aggregator_flush_errors_total`
+// so the existing dashboard panels keep reporting until they're migrated:
+//   - "Feature Flags - General" > "Redis Errors (Flag Requests)"
+//   - "Feature Flags - Cache" > "Redis Errors (Flag Requests)"
+//   - "Feature flag evaluation metrics" > "Flags request billing errors"
+// Drop this constant and its emission in `record_chunk_error` once those
+// panels switch to `billing_aggregator_flush_errors_total{error_type=...}`.
+pub const FLAG_REQUEST_REDIS_ERROR_LEGACY: &str = "flag_request_redis_error";
 
 // Flag evaluation timing
 pub const FLAG_EVALUATION_TIME: &str = "flags_evaluation_time";

@@ -5624,12 +5624,15 @@ async fn test_skip_writes_suppresses_billing_redis_counter(
     #[case] skip_writes: bool,
 ) -> Result<()> {
     use feature_flags::config::FlexBool;
-    use feature_flags::flags::flag_analytics::get_team_request_key;
+    use feature_flags::flags::flag_analytics::{current_bucket, get_team_request_key};
     use feature_flags::flags::flag_request::FlagRequestType;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     let mut config = DEFAULT_TEST_CONFIG.clone();
     config.skip_writes = FlexBool(skip_writes);
+    // Tight flush interval so the aggregator's background flusher writes the
+    // recorded counter to Redis before the assertion. Default is 10s; without
+    // this override the test would race the flush.
+    config.billing_aggregator_flush_interval_ms = 100;
 
     let distinct_id = format!("billing_test_{}", rand::thread_rng().gen::<u32>());
 
@@ -5677,27 +5680,112 @@ async fn test_skip_writes_suppresses_billing_redis_counter(
         .await;
     assert_eq!(StatusCode::OK, res.status());
 
-    // Compute the same time bucket used by increment_request_count
-    let time_bucket = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-        / 120; // CACHE_BUCKET_SIZE = 60 * 2
-
-    let counter = client.hget(billing_key, time_bucket.to_string()).await;
+    let bucket_field = current_bucket().to_string();
 
     if skip_writes {
+        // For the negative case we need to wait long enough that a flush
+        // window has demonstrably elapsed without a write — otherwise we'd
+        // be asserting on a race we haven't run yet.
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        let counter = client.hget(billing_key, bucket_field).await;
         assert!(
             counter.is_err(),
             "billing counter should NOT be incremented when skip_writes=true"
         );
     } else {
+        // Poll for the value: returns as soon as the flusher lands the write.
+        let counter = poll_for_billing_counter(&client, &billing_key, &bucket_field).await;
         assert_eq!(
-            counter.unwrap(),
-            "1",
+            counter, "1",
             "billing counter should be incremented when skip_writes=false"
         );
     }
+
+    Ok(())
+}
+
+/// Verifies the aggregator writes to BOTH the team-level and the library-level
+/// Redis hashes when the request carries an SDK user-agent. The
+/// `test_skip_writes_suppresses_billing_redis_counter` test only exercises the
+/// no-library path; this test covers the library/SDK key write, which was
+/// the only behavior verified by the deleted `test_increment_request_count_with_sdk`.
+#[tokio::test]
+async fn test_aggregator_writes_library_key_for_sdk_request() -> Result<()> {
+    use feature_flags::config::FlexBool;
+    use feature_flags::flags::flag_analytics::{
+        current_bucket, get_team_request_key, get_team_request_library_key,
+    };
+    use feature_flags::flags::flag_request::FlagRequestType;
+    use feature_flags::handler::types::Library;
+
+    let mut config = DEFAULT_TEST_CONFIG.clone();
+    config.skip_writes = FlexBool(false);
+    config.billing_aggregator_flush_interval_ms = 100;
+
+    let distinct_id = format!("billing_lib_test_{}", rand::thread_rng().gen::<u32>());
+
+    let client = setup_redis_client(Some(config.redis_url.clone())).await;
+    let team = insert_new_team_in_redis(client.clone()).await.unwrap();
+    let token = team.api_token.clone();
+
+    let context = TestContext::new(None).await;
+    context.insert_new_team(Some(team.id)).await.unwrap();
+    context
+        .insert_person(team.id, distinct_id.clone(), None)
+        .await
+        .unwrap();
+
+    let flag_json = json!([{
+        "id": 1,
+        "key": "billable-flag",
+        "name": "Billable Flag",
+        "active": true,
+        "deleted": false,
+        "team_id": team.id,
+        "filters": {
+            "groups": [{
+                "properties": [],
+                "rollout_percentage": 100
+            }],
+        },
+    }]);
+    insert_flags_for_team_in_redis(client.clone(), team.id, Some(flag_json.to_string())).await?;
+
+    let team_key = get_team_request_key(team.id, FlagRequestType::Decide);
+    let library_key =
+        get_team_request_library_key(team.id, FlagRequestType::Decide, Library::PosthogNode);
+    client.del(team_key.clone()).await.unwrap();
+    client.del(library_key.clone()).await.unwrap();
+
+    let server = ServerHandle::for_config(config).await;
+
+    let payload = json!({
+        "token": token,
+        "distinct_id": distinct_id,
+    });
+
+    // Direct reqwest call so we can set the SDK user-agent that drives
+    // Library::from_headers → Library::PosthogNode.
+    let http = reqwest::Client::new();
+    let res = http
+        .post(format!("http://{}/flags?v=2", server.addr))
+        .header("content-type", "application/json")
+        .header("user-agent", "posthog-node/3.1.0")
+        .body(payload.to_string())
+        .send()
+        .await?;
+    assert_eq!(StatusCode::OK, res.status());
+
+    let bucket_field = current_bucket().to_string();
+
+    let team_counter = poll_for_billing_counter(&client, &team_key, &bucket_field).await;
+    assert_eq!(team_counter, "1", "team key should reflect one request");
+
+    let library_counter = poll_for_billing_counter(&client, &library_key, &bucket_field).await;
+    assert_eq!(
+        library_counter, "1",
+        "library key should reflect one request"
+    );
 
     Ok(())
 }

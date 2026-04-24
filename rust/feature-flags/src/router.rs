@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use crate::billing_limiters::{FeatureFlagsLimiter, SessionReplayLimiter};
+use crate::billing::{BillingAggregator, FeatureFlagsLimiter, SessionReplayLimiter};
 use crate::database_pools::DatabasePools;
 use axum::{
     error_handling::HandleErrorLayer,
@@ -94,6 +94,11 @@ pub struct State {
     pub auth_token_cache: Arc<ReadThroughCacheWithMetrics>,
     /// Provider for realtime/behavioral cohort membership lookups
     pub cohort_membership_provider: Arc<dyn CohortMembershipProvider>,
+    /// In-process billing request aggregator. `record()` is a synchronous,
+    /// lock-scoped HashMap insert; a background task flushes batched
+    /// `HINCRBY`s to Redis on `flush_interval`. See
+    /// `crate::billing::aggregator` for accounting and shutdown semantics.
+    pub billing_aggregator: Arc<BillingAggregator>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -116,6 +121,7 @@ pub fn router(
     team_negative_cache: NegativeCache,
     auth_token_cache: Arc<ReadThroughCacheWithMetrics>,
     cohort_membership_provider: Arc<dyn CohortMembershipProvider>,
+    billing_aggregator: Arc<BillingAggregator>,
     config: Config,
 ) -> Router {
     // Initialize flag definitions rate limiter with default and custom team rates
@@ -202,6 +208,7 @@ pub fn router(
         team_negative_cache,
         cohort_membership_provider,
         auth_token_cache,
+        billing_aggregator,
     };
 
     // Very permissive CORS policy, as old SDK versions

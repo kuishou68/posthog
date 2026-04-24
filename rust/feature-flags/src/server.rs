@@ -3,7 +3,9 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::billing_limiters::{FeatureFlagsLimiter, SessionReplayLimiter};
+use crate::billing::{
+    BillingAggregator, BillingAggregatorConfig, FeatureFlagsLimiter, SessionReplayLimiter,
+};
 use crate::cohorts::cohort_cache_manager::CohortCacheManager;
 use crate::cohorts::membership::{
     CachedCohortMembershipProvider, CohortMembershipProvider, NoOpCohortMembershipProvider,
@@ -402,6 +404,18 @@ pub async fn serve<F>(
 
     let service_mode = config.service_mode.clone();
 
+    let billing_aggregator = BillingAggregator::start(
+        redis_client.clone(),
+        BillingAggregatorConfig {
+            flush_interval: Duration::from_millis(config.billing_aggregator_flush_interval_ms),
+            max_pending_entries: config.billing_aggregator_max_pending_entries,
+            per_flush_batch_size: config.billing_aggregator_per_flush_batch_size,
+            shutdown_flush_timeout: Duration::from_millis(
+                config.billing_aggregator_shutdown_flush_timeout_ms,
+            ),
+        },
+    );
+
     let app = router::router(
         redis_client,
         dedicated_redis_client,
@@ -421,6 +435,7 @@ pub async fn serve<F>(
         team_negative_cache,
         auth_token_cache,
         cohort_membership_provider,
+        billing_aggregator.clone(),
         config,
     );
 
@@ -429,13 +444,20 @@ pub async fn serve<F>(
         "listening on {:?}",
         listener.local_addr().unwrap()
     );
-    axum::serve(
+    let serve_result = axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
     .with_graceful_shutdown(shutdown)
-    .await
-    .unwrap()
+    .await;
+
+    // Must run *after* `axum::serve(...).await` resolves: axum drains
+    // in-flight requests first, so every recorded billable request is in the
+    // aggregator map by the time we flush. Calling this before the serve
+    // future completes would miss late-arriving records.
+    billing_aggregator.shutdown().await;
+
+    serve_result.unwrap()
 }
 
 /// Create a ReadWriteClient that automatically routes reads to replica and writes to primary
