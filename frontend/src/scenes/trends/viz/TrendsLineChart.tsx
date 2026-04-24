@@ -28,11 +28,11 @@ import { handleTrendsLineChartClick } from './handleTrendsLineChartClick'
 import type { TrendsSeriesMeta } from './trendsSeriesMeta'
 import { TrendsTooltip } from './TrendsTooltip'
 
-interface TrendsLineChartD3Props {
+interface TrendsLineChartProps {
     context?: QueryContext<InsightVizNode>
 }
 
-export function TrendsLineChartD3({ context }: TrendsLineChartD3Props): JSX.Element | null {
+export function TrendsLineChart({ context }: TrendsLineChartProps): JSX.Element | null {
     const { isDarkModeOn } = useValues(themeLogic)
     const theme = useMemo(() => buildTheme(), [isDarkModeOn])
     const { insightProps } = useValues(insightLogic)
