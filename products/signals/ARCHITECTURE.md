@@ -172,6 +172,10 @@ Keeping repository selection in its own activity gives it independent retry / ti
 - **N repos connected:** runs a sandbox repo-discovery agent using `PostHog/.github` as a lightweight dummy clone; the agent uses `gh` CLI to inspect candidate repositories and choose the best match
 - The activity runs in a sandbox environment restricted to GitHub-related domains
 
+##### Repository heavy cache
+
+`IntegrationRepositoryCacheEntry` (Postgres, defined in `posthog/models/integration_repository_cache.py`) stores per-repo README + recursive blob paths + descriptive metadata, populated lazily by `GitHubRepositoryFullCache.sync_full_cache_entry()` and SHA-gated against the default-branch commit. It's exposed to the selection agent as the HogQL system table `system.integration_repository_cache` so the agent can grep paths server-side via `ARRAY JOIN splitByString('\n', tree_paths)` instead of hitting GitHub's `/search/code` endpoint (30 req/min hard ceiling). The lightweight (id, name, full_name) list stays on `Integration.repository_cache` (JSONField) so the IDE repo-dropdown read path is unchanged.
+
 #### Re-promotion
 
 Reports are re-promoted when new evidence arrives, but not on every single signal forever. `signals_at_run` is advanced when a run starts, and the grouping logic only re-promotes when `signal_count >= signals_at_run`.
