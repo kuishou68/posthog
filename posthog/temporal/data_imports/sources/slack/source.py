@@ -112,7 +112,7 @@ class SlackSource(ResumableSource[SlackSourceConfig, SlackResumeConfig], Webhook
             iconPath="/static/services/slack.png",
             featureFlag="slack-dwh",
             unreleasedSource=True,
-            betaSource=True,
+            releaseStatus="beta",
             fields=cast(
                 list[FieldType],
                 [
