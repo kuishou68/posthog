@@ -45,7 +45,6 @@ from .filters import Filter, RetentionFilter
 from .group import Group
 from .group_usage_metric import GroupUsageMetric
 from .group_type_mapping import GroupTypeMapping
-from .guest_resource_grant import GuestResourceGrant
 from .heatmap_saved import SavedHeatmap, HeatmapSnapshot
 from .host_definition import HostDefinition
 from .hog_flow import HogFlow
@@ -148,7 +147,6 @@ __all__ = [
     "Group",
     "GroupUsageMetric",
     "GroupTypeMapping",
-    "GuestResourceGrant",
     "HeatmapSnapshot",
     "HealthIssue",
     "HogFlow",
