@@ -322,3 +322,6 @@ tools:
     tasks-runs-resume-in-cloud-create:
         operation: tasks_runs_resume_in_cloud_create
         enabled: false
+    tasks-repositories-retrieve:
+        operation: tasks_repositories_retrieve
+        enabled: false
