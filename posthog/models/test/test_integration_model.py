@@ -1,4 +1,5 @@
 import time
+import base64
 import socket
 from datetime import UTC, datetime, timedelta
 from typing import Optional
@@ -267,7 +268,6 @@ class TestOauthIntegrationModel(BaseTest):
         so we extract user info from the id_token JWT instead.
         """
         import json
-        import base64
 
         # Create a mock JWT id_token with sub and email in the payload
         jwt_payload = {"sub": "linkedin_user_123", "email": "user@example.com", "iat": 1704110400}
@@ -1305,6 +1305,81 @@ class TestGitHubIntegrationModel(BaseTest):
             call(repo, limit=100, offset=100),
             call(repo, limit=100, offset=200),
         ]
+
+
+class TestGitHubIntegrationGhApiGet(BaseTest):
+    def _create_integration(self) -> Integration:
+        return Integration.objects.create(
+            team=self.team,
+            kind="github",
+            config={"installation_id": "INSTALL", "account": {"name": "PostHog"}},
+            sensitive_config={"access_token": "ACCESS_TOKEN"},
+        )
+
+    @patch("posthog.models.integration.requests.get")
+    @patch("posthog.models.integration.GitHubIntegration.access_token_expired", return_value=False)
+    def test_returns_parsed_json_body(self, _mock_expired, mock_get):
+        ok = MagicMock()
+        ok.status_code = 200
+        ok.json.return_value = {"default_branch": "main"}
+        mock_get.return_value = ok
+
+        integration = self._create_integration()
+        body = GitHubIntegration(integration)._gh_api_get("/repos/PostHog/posthog")
+        assert body == {"default_branch": "main"}
+
+    @patch("posthog.models.integration.requests.get")
+    @patch("posthog.models.integration.GitHubIntegration.access_token_expired", return_value=False)
+    def test_retries_once_on_transient_5xx(self, _mock_expired, mock_get):
+        transient = MagicMock()
+        transient.status_code = 503
+        transient.json.return_value = {}
+        ok = MagicMock()
+        ok.status_code = 200
+        ok.json.return_value = {"ok": True}
+        mock_get.side_effect = [transient, ok]
+
+        integration = self._create_integration()
+        body = GitHubIntegration(integration)._gh_api_get("/repos/PostHog/posthog")
+        assert body == {"ok": True}
+        assert mock_get.call_count == 2
+
+    @patch("posthog.models.integration.requests.get")
+    @patch("posthog.models.integration.GitHubIntegration.access_token_expired", return_value=False)
+    def test_raises_rate_limit_error_on_secondary_limit(self, _mock_expired, mock_get):
+        resp = MagicMock()
+        resp.status_code = 403
+        resp.headers = {"Retry-After": "5"}
+        resp.json.return_value = {"message": "secondary rate limit"}
+        mock_get.return_value = resp
+
+        integration = self._create_integration()
+        with pytest.raises(GitHubIntegrationError) as excinfo:
+            GitHubIntegration(integration)._gh_api_get("/repos/PostHog/posthog")
+        assert excinfo.value.is_rate_limit is True
+        assert excinfo.value.retry_after_seconds == 5.0
+
+    @patch("posthog.models.integration.requests.get")
+    @patch("posthog.models.integration.GitHubIntegration.refresh_access_token")
+    @patch("posthog.models.integration.GitHubIntegration.access_token_expired", return_value=False)
+    def test_refreshes_token_on_401(self, _mock_expired, mock_refresh, mock_get):
+        unauth = MagicMock()
+        unauth.status_code = 401
+        unauth.json.return_value = {}
+        ok = MagicMock()
+        ok.status_code = 200
+        ok.json.return_value = {"after_refresh": True}
+        mock_get.side_effect = [unauth, ok]
+
+        integration = self._create_integration()
+        body = GitHubIntegration(integration)._gh_api_get("/repos/PostHog/posthog")
+        assert body == {"after_refresh": True}
+        assert mock_refresh.called
+
+    def test_rejects_path_without_leading_slash(self):
+        integration = self._create_integration()
+        with pytest.raises(ValueError, match="must start with"):
+            GitHubIntegration(integration)._gh_api_get("repos/PostHog/posthog")
 
 
 class TestDatabricksIntegrationModel(BaseTest):
