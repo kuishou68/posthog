@@ -135,6 +135,7 @@ import { OrganizationSecuritySettings } from './organization/OrganizationSecurit
 import { OrganizationDisplayName } from './organization/OrgDisplayName'
 import { OrgIPAnonymizationDefault } from './organization/OrgIPAnonymizationDefault'
 import { VerifiedDomains } from './organization/VerifiedDomains/VerifiedDomains'
+import { DataDeletion } from './project/DataDeletion/DataDeletion'
 import { ProjectDangerZone } from './project/ProjectDangerZone'
 import { ProjectMove } from './project/ProjectMove'
 import { ProjectDisplayName } from './project/ProjectSettings'
@@ -1403,6 +1404,22 @@ export const SETTINGS_MAP: SettingSection[] = [
                 description: 'A human-friendly name for this project.',
                 component: <ProjectDisplayName />,
                 keywords: ['name', 'rename', 'label'],
+            },
+        ],
+    },
+    {
+        level: 'project',
+        id: 'project-data-deletion',
+        title: 'Data deletion',
+        flag: 'DATA_DELETION_SELF_SERVE',
+        settings: [
+            {
+                id: 'project-data-deletion-manage',
+                title: 'Delete events or properties',
+                description:
+                    'Submit a request to delete events or strip properties from events for this project. PostHog reviews each request before execution.',
+                component: <DataDeletion />,
+                keywords: ['delete', 'remove', 'gdpr', 'privacy', 'events', 'properties'],
             },
         ],
     },

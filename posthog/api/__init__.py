@@ -1,7 +1,15 @@
 from rest_framework import decorators, exceptions, viewsets
 from rest_framework_extensions.routers import NestedRegistryItem
 
-from posthog.api import data_color_theme, hog_flow, hog_flow_template, metalytics, my_notifications, project
+from posthog.api import (
+    data_color_theme,
+    data_deletion_request,
+    hog_flow,
+    hog_flow_template,
+    metalytics,
+    my_notifications,
+    project,
+)
 from posthog.api.batch_imports import BatchImportViewSet
 from posthog.api.csp_reporting import CSPReportingViewSet
 from posthog.api.js_snippet import JsSnippetViewSet
@@ -325,6 +333,13 @@ environments_router.register(
     r"column_configurations",
     ColumnConfigurationViewSet,
     "environment_column_configurations",
+    ["team_id"],
+)
+
+environments_router.register(
+    r"data_deletion_requests",
+    data_deletion_request.DataDeletionRequestViewSet,
+    "environment_data_deletion_requests",
     ["team_id"],
 )
 

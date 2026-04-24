@@ -46,6 +46,7 @@ export type SettingSectionId =
     | 'environment-danger-zone'
     | 'project-details'
     | 'project-danger-zone'
+    | 'project-data-deletion'
     | 'project-autocapture' // TODO: This section is for backward compat – remove when Environments are rolled out
     | 'project-product-analytics' // TODO: This section is for backward compat – remove when Environments are rolled out
     | 'project-replay' // TODO: This section is for backward compat – remove when Environments are rolled out
@@ -151,6 +152,7 @@ export type SettingId =
     | 'environment-delete'
     | 'project-delete'
     | 'project-move'
+    | 'project-data-deletion-manage'
     | 'organization-display-name'
     | 'organization-integrations-list'
     | 'organization-oauth-apps-list'
