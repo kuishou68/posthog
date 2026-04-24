@@ -86,7 +86,7 @@ class TestSlackWarehouseWebhookTemplate(BaseHogFunctionTemplateTest):
         assert res.result == {
             "httpResponse": {
                 "status": 200,
-                "headers": {"Content-Type": "application/json"},
+                "contentType": "application/json",
                 "body": json.dumps({"challenge": "chal_xyz"}),
             }
         }

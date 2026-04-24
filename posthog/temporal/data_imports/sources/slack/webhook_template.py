@@ -63,7 +63,7 @@ if (body.type = 'url_verification') {
   return {
     'httpResponse': {
       'status': 200,
-      'headers': {'Content-Type': 'application/json'},
+      'contentType': 'application/json',
       'body': jsonStringify({'challenge': body.challenge})
     }
   }
