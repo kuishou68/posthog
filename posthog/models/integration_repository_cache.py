@@ -191,11 +191,29 @@ class GitHubRepositoryFullCache:
     def sync_full_cache_entry_async(self, full_name: str) -> IntegrationRepositoryCacheEntry:
         return self.sync_full_cache_entry(full_name)
 
+    @database_sync_to_async
+    def _evict_orphans(self, valid_full_names: set[str]) -> int:
+        deleted, _ = self.integration.repository_cache_entries.exclude(full_name__in=valid_full_names).delete()
+        return deleted
+
     async def sync_full_cache(self, *, concurrency: int = 10) -> list[IntegrationRepositoryCacheEntry | BaseException]:
-        """Bulk heavy sync for all repos this integration sees."""
+        """Bulk heavy sync for all repos this integration sees.
+
+        The light JSONField cache (``Integration.repository_cache``) is the authoritative
+        set — rows for repos no longer in it are deleted before syncing.
+        """
+        # 1. Source of truth: the light cache. This also refreshes it from GitHub if >1h stale.
         repos = await self.github.list_all_cached_repositories_async()
-        full_names = [r["full_name"] for r in repos if isinstance(r.get("full_name"), str)]
-        if not full_names:
+        valid_full_names = {r["full_name"] for r in repos if isinstance(r.get("full_name"), str)}
+        # 2. Evict orphans — heavy cache is always a subset of the light cache.
+        evicted = await self._evict_orphans(valid_full_names)
+        if evicted:
+            logger.info(
+                "github_full_cache.evicted_orphans",
+                integration_id=self.integration.id,
+                count=evicted,
+            )
+        if not valid_full_names:
             return []
 
         def make_fn(full_name: str) -> Callable[[], Awaitable[IntegrationRepositoryCacheEntry]]:
@@ -204,9 +222,9 @@ class GitHubRepositoryFullCache:
 
             return run
 
-        # Cache all the repos
+        # 3. Sync each remaining repo with bounded concurrency + rate-limit-aware backoff.
         return await run_parallel_with_backoff(
-            [make_fn(name) for name in full_names],
+            [make_fn(name) for name in valid_full_names],
             concurrency=concurrency,
             is_retryable=lambda exc: isinstance(exc, GitHubIntegrationError) and exc.is_rate_limit,
             get_retry_delay=lambda exc: getattr(exc, "retry_after_seconds", None),

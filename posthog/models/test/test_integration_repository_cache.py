@@ -9,6 +9,8 @@ from unittest.mock import MagicMock, patch
 from django.core.cache import cache
 from django.utils import timezone
 
+from asgiref.sync import async_to_sync
+
 from posthog.models.integration import GitHubIntegration, GitHubIntegrationError, Integration
 from posthog.models.integration_repository_cache import (
     GITHUB_REPOSITORY_FULL_CACHE_TTL_SECONDS,
@@ -283,3 +285,62 @@ class TestGitHubRepositoryFullCache(BaseTest):
         assert len(results) == 2
         broken = next(r for r in results if isinstance(r, GitHubIntegrationError))
         assert str(broken) == "boom"
+
+    def test_sync_full_cache_evicts_orphans_not_in_light_cache(self):
+        integration = self._create_integration()
+        # Seed: one repo still in the light list ("PostHog/posthog") and one orphan ("PostHog/gone").
+        IntegrationRepositoryCacheEntry.objects.create(
+            integration=integration,
+            team=self.team,
+            full_name="PostHog/posthog",
+            default_branch="main",
+            default_branch_sha="SHA1",
+            readme="cached",
+        )
+        IntegrationRepositoryCacheEntry.objects.create(
+            integration=integration,
+            team=self.team,
+            full_name="PostHog/gone",
+            default_branch="main",
+            default_branch_sha="SHA_GONE",
+            readme="cached",
+        )
+
+        async def fake_entry_async(full_name):
+            return MagicMock(full_name=full_name)
+
+        async def fake_list():
+            return [{"full_name": "PostHog/posthog"}]  # PostHog/gone removed
+
+        repo_cache = self._cache_for(integration)
+        with (
+            patch.object(repo_cache, "sync_full_cache_entry_async", side_effect=fake_entry_async),
+            patch.object(repo_cache.github, "list_all_cached_repositories_async", side_effect=fake_list),
+        ):
+            # async_to_sync keeps thread-sensitive DB ops on the test thread so they see
+            # the rows created above inside the TestCase transaction.
+            async_to_sync(repo_cache.sync_full_cache)()
+
+        remaining = set(integration.repository_cache_entries.values_list("full_name", flat=True))
+        assert remaining == {"PostHog/posthog"}
+
+    def test_sync_full_cache_evicts_all_when_light_cache_is_empty(self):
+        integration = self._create_integration()
+        IntegrationRepositoryCacheEntry.objects.create(
+            integration=integration,
+            team=self.team,
+            full_name="PostHog/gone",
+            default_branch="main",
+            default_branch_sha="SHA_GONE",
+            readme="cached",
+        )
+
+        async def fake_list():
+            return []
+
+        repo_cache = self._cache_for(integration)
+        with patch.object(repo_cache.github, "list_all_cached_repositories_async", side_effect=fake_list):
+            results = async_to_sync(repo_cache.sync_full_cache)()
+
+        assert results == []
+        assert not integration.repository_cache_entries.exists()
