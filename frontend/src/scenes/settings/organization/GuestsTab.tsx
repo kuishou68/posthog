@@ -41,8 +41,7 @@ function PromoteGuestModal({
             }
         >
             <LemonBanner type="warning">
-                This removes the user's guest status and deletes all their resource grants. You'll need to set up
-                regular access control afterward. This cannot be undone.
+                Promoting this guest resets their access controls — you will need to set up regular access from scratch.
             </LemonBanner>
         </LemonModal>
     )
