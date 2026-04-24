@@ -535,6 +535,9 @@ class UserAccessControl:
 
         # If access controls aren't supported, then we return the default access level
         if not self.access_controls_supported:
+            # Guest memberships invert the default: no AC feature means no access at all.
+            if org_membership.is_guest:
+                return NO_ACCESS_LEVEL if not explicit else None
             return default_access_level(resource) if not explicit else None
 
         filters = self._access_controls_filters_for_object(resource, str(obj.id))  # type: ignore
@@ -551,6 +554,9 @@ class UserAccessControl:
 
         # If there is no specified controls on the resource then we return the default access level
         if not access_controls:
+            # Guest memberships invert the default: without an AC row on this object, deny.
+            if org_membership.is_guest:
+                return NO_ACCESS_LEVEL if not explicit else None
             return default_access_level(resource) if not explicit else None
 
         # If there are access controls we pick the highest level the user has
@@ -690,6 +696,10 @@ class UserAccessControl:
 
         # These are resources which we don't have resource level access controls for
         if resource == "organization" or resource == "project" or resource == "plugin":
+            # Guest memberships invert the default here too — guests have no project/plugin/org default.
+            org_membership = self._organization_membership
+            if org_membership and org_membership.is_guest:
+                return NO_ACCESS_LEVEL
             return default_access_level(resource)
 
         org_membership = self._organization_membership
@@ -703,13 +713,21 @@ class UserAccessControl:
             return highest_access_level(resource)
 
         if not self.access_controls_supported:
-            # If access controls aren't supported, then return the default access level
+            # If access controls aren't supported, then return the default access level.
+            # Guest memberships invert this default: no AC feature means no access.
+            if org_membership.is_guest:
+                return NO_ACCESS_LEVEL
             return default_access_level(resource)
 
         filters = self._access_controls_filters_for_resource(resource)
         access_controls = self._get_access_controls(filters)
 
         if not access_controls:
+            # Guest memberships invert the default: resource-level access defaults to none.
+            # Specific object-level AC rows still grant access via filter_queryset_by_access_level
+            # (the "resource level none but explicit AC grants access" branch, ~line 878).
+            if org_membership.is_guest:
+                return NO_ACCESS_LEVEL
             return default_access_level(resource)
 
         return max(
