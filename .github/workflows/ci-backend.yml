@@ -249,6 +249,9 @@ jobs:
 
         steps:
             - uses: actions/checkout@v6
+              with:
+                  fetch-depth: 1000
+                  filter: blob:none
 
             - name: Setup pnpm
               uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
@@ -271,10 +274,12 @@ jobs:
                   # On pushes to master, always run everything.
                   # On PRs, use the path filter to detect legacy changes.
                   LEGACY_CHANGED: ${{ github.event_name != 'pull_request' || needs.changes.outputs.legacy }}
+                  TURBO_SCM_BASE: ${{ github.event.pull_request.base.sha }}
+                  TURBO_SCM_HEAD: ${{ github.sha }}
               run: |
-                  # turbo-discover.js diffs backend:test vs backend:contract-check
-                  # to detect isolated products. Non-isolated product changes trigger
-                  # the full suite (all products + Django).
+                  # turbo-discover.js uses Turbo's Git affectedness to detect
+                  # changed products. Non-isolated product changes trigger the
+                  # full suite (all products + Django).
                   RESULT=$(node .github/scripts/turbo-discover.js)
                   echo "Result: $RESULT"
                   echo "matrix=$(echo "$RESULT" | jq -c '.matrix')" >> $GITHUB_OUTPUT
