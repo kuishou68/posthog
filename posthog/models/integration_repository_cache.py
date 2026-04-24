@@ -1,0 +1,190 @@
+"""Per-repository heavy cache for GitHub integrations.
+
+Stores README + full file tree + descriptive metadata so the Signals selection
+agent can server-side grep paths via HogQL (`ARRAY JOIN splitByString('\\n',
+tree_paths)`) instead of hitting GitHub's `/search/code` endpoint (30 req/min
+ceiling). The lightweight (id, name, full_name) list stays on
+``Integration.repository_cache`` (JSONField) — that read path stays cheap for
+the IDE repo dropdown.
+"""
+
+from __future__ import annotations
+
+import time
+import base64
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
+
+from django.db import models
+
+import structlog
+
+from posthog.helpers.async_concurrency import run_parallel_with_backoff
+from posthog.models.integration import GitHubIntegration, GitHubIntegrationError, Integration
+from posthog.sync import database_sync_to_async
+
+if TYPE_CHECKING:
+    pass
+
+logger = structlog.get_logger(__name__)
+
+
+class IntegrationRepositoryCacheEntry(models.Model):
+    integration = models.ForeignKey(Integration, on_delete=models.CASCADE, related_name="repository_cache_entries")
+    # Denormalized from Integration so HogQL's team_id guard can filter this table directly.
+    team = models.ForeignKey("posthog.Team", on_delete=models.CASCADE)
+    full_name = models.TextField()  # Duplicate field, required for indexing
+    description = models.TextField(null=True, blank=True)
+    topics = models.JSONField(default=list, blank=True)
+    archived = models.BooleanField(default=False)
+    fork = models.BooleanField(default=False)
+    primary_language = models.TextField(null=True, blank=True)
+    default_branch = models.TextField()
+    default_branch_sha = models.TextField()
+    readme = models.TextField(default="", blank=True)
+    # Newline-separated blob paths. Server-side grep uses HogQL
+    # `ARRAY JOIN splitByString('\n', tree_paths) AS path` to unnest and ILIKE on path.
+    tree_paths = models.TextField(default="", blank=True)
+    tree_truncated = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        app_label = "posthog"
+        unique_together = [("integration", "full_name")]
+        indexes = [
+            models.Index(fields=["team", "updated_at"]),
+            models.Index(fields=["integration", "full_name"]),
+        ]
+
+
+class GitHubRepositoryFullCache:
+    """Owns the heavy per-repo cache (README + tree + metadata) for a GitHub integration."""
+
+    def __init__(self, github: GitHubIntegration) -> None:
+        self.github = github
+
+    @property
+    def integration(self) -> Integration:
+        return self.github.integration
+
+    def sync_full_cache_entry(self, full_name: str) -> IntegrationRepositoryCacheEntry:
+        """Fetch one repo's heavy metadata + README + file tree, upsert the cache row."""
+        # 1. Validate input.
+        if "/" not in full_name:
+            raise ValueError(f"full_name must be in 'owner/repo' format, got {full_name!r}")
+        owner, repo = full_name.split("/", 1)
+        start = time.monotonic()
+        # 2. Always fetch repo metadata + default-branch SHA (cheap; needed to choose light vs heavy path).
+        repo_data = self.github._gh_api_get(f"/repos/{owner}/{repo}")
+        default_branch = repo_data.get("default_branch") or "main"
+        branch_data = self.github._gh_api_get(f"/repos/{owner}/{repo}/branches/{default_branch}")
+        commit = branch_data.get("commit") or {}
+        default_branch_sha = commit.get("sha")
+        if not isinstance(default_branch_sha, str) or not default_branch_sha:
+            raise GitHubIntegrationError(
+                f"GitHubRepositoryFullCache: branch {default_branch} missing commit sha for {full_name}"
+            )
+        # 3. Look up the existing cached row to decide light vs heavy path.
+        existing = self.integration.repository_cache_entries.filter(full_name=full_name).first()
+        # 4. Light path: SHA unchanged + readme already cached → refresh only mutable metadata, skip README/tree.
+        if existing and existing.default_branch_sha == default_branch_sha and existing.readme:
+            existing.description = repo_data.get("description")
+            existing.topics = repo_data.get("topics") or []
+            existing.archived = bool(repo_data.get("archived", False))
+            existing.fork = bool(repo_data.get("fork", False))
+            existing.primary_language = repo_data.get("language")
+            existing.default_branch = default_branch
+            existing.save(
+                update_fields=[
+                    "description",
+                    "topics",
+                    "archived",
+                    "fork",
+                    "primary_language",
+                    "default_branch",
+                    "updated_at",
+                ]
+            )
+            logger.info(
+                "github_full_cache.sync_repo",
+                integration_id=self.integration.id,
+                full_name=full_name,
+                sha_unchanged=True,
+                duration_ms=int((time.monotonic() - start) * 1000),
+            )
+            return existing
+        # 5. Heavy path
+        # 5a: best-effort README (404 is normal — repos without one stay with empty string).
+        readme_text = ""
+        try:
+            readme_data = self.github._gh_api_get(f"/repos/{owner}/{repo}/readme")
+            encoded = readme_data.get("content")
+            if isinstance(encoded, str):
+                readme_text = base64.b64decode(encoded).decode("utf-8", errors="replace")
+        except GitHubIntegrationError:
+            # Missing README is expected; logger.exception still surfaces SDK-level bugs.
+            logger.exception(
+                "GitHubRepositoryFullCache: readme fetch failed",
+                integration_id=self.integration.id,
+                full_name=full_name,
+            )
+        # 5b. Recursive file tree → newline-separated blob paths for ARRAY JOIN grep.
+        tree_data = self.github._gh_api_get(f"/repos/{owner}/{repo}/git/trees/{default_branch_sha}?recursive=1")
+        tree_entries = tree_data.get("tree") or []
+        tree_paths = "\n".join(
+            entry["path"]
+            for entry in tree_entries
+            if isinstance(entry, dict) and entry.get("type") == "blob" and isinstance(entry.get("path"), str)
+        )
+        # 6. Upsert the cache row.
+        entry, _ = IntegrationRepositoryCacheEntry.objects.update_or_create(
+            integration=self.integration,
+            full_name=full_name,
+            defaults={
+                "team_id": self.integration.team_id,
+                "description": repo_data.get("description"),
+                "topics": repo_data.get("topics") or [],
+                "archived": bool(repo_data.get("archived", False)),
+                "fork": bool(repo_data.get("fork", False)),
+                "primary_language": repo_data.get("language"),
+                "default_branch": default_branch,
+                "default_branch_sha": default_branch_sha,
+                "readme": readme_text,
+                "tree_paths": tree_paths,
+                "tree_truncated": bool(tree_data.get("truncated", False)),
+            },
+        )
+        logger.info(
+            "github_full_cache.sync_repo",
+            integration_id=self.integration.id,
+            full_name=full_name,
+            sha_unchanged=False,
+            tree_truncated=entry.tree_truncated,
+            duration_ms=int((time.monotonic() - start) * 1000),
+        )
+        return entry
+
+    @database_sync_to_async
+    def sync_full_cache_entry_async(self, full_name: str) -> IntegrationRepositoryCacheEntry:
+        return self.sync_full_cache_entry(full_name)
+
+    async def sync_full_cache(self, *, concurrency: int = 10) -> list[IntegrationRepositoryCacheEntry | BaseException]:
+        """Bulk heavy sync for all repos this integration sees."""
+        repos = await self.github.list_all_cached_repositories_async()
+        full_names = [r["full_name"] for r in repos if isinstance(r.get("full_name"), str)]
+        if not full_names:
+            return []
+
+        def make_fn(full_name: str) -> Callable[[], Awaitable[IntegrationRepositoryCacheEntry]]:
+            async def run() -> IntegrationRepositoryCacheEntry:
+                return await self.sync_full_cache_entry_async(full_name)
+
+            return run
+
+        # Cache all the repos
+        return await run_parallel_with_backoff(
+            [make_fn(name) for name in full_names],
+            concurrency=concurrency,
+            is_retryable=lambda exc: isinstance(exc, GitHubIntegrationError) and exc.is_rate_limit,
+            get_retry_delay=lambda exc: getattr(exc, "retry_after_seconds", None),
+        )
