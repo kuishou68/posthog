@@ -1,14 +1,20 @@
 import base64
 import asyncio
+from datetime import timedelta
 
 import pytest
 from posthog.test.base import BaseTest
 from unittest.mock import MagicMock, patch
 
 from django.core.cache import cache
+from django.utils import timezone
 
 from posthog.models.integration import GitHubIntegration, GitHubIntegrationError, Integration
-from posthog.models.integration_repository_cache import GitHubRepositoryFullCache, IntegrationRepositoryCacheEntry
+from posthog.models.integration_repository_cache import (
+    GITHUB_REPOSITORY_FULL_CACHE_TTL_SECONDS,
+    GitHubRepositoryFullCache,
+    IntegrationRepositoryCacheEntry,
+)
 
 
 class TestGitHubRepositoryFullCache(BaseTest):
@@ -82,9 +88,51 @@ class TestGitHubRepositoryFullCache(BaseTest):
         assert entry.tree_paths == "README.md\nsrc/app.py"
         assert entry.tree_truncated is False
 
-    def test_sync_full_cache_entry_skips_readme_refetch_when_sha_unchanged(self):
+    def test_sync_full_cache_entry_returns_cached_within_ttl_without_api_calls(self):
         integration = self._create_integration()
         IntegrationRepositoryCacheEntry.objects.create(
+            integration=integration,
+            team=self.team,
+            full_name="PostHog/posthog",
+            default_branch="main",
+            default_branch_sha="SHA1",
+            readme="cached",
+            tree_paths="old/path",
+        )
+
+        with patch("posthog.models.integration.GitHubIntegration._gh_api_get", autospec=True) as mock_gh_api_get:
+            entry = self._cache_for(integration).sync_full_cache_entry("PostHog/posthog")
+
+        assert mock_gh_api_get.call_count == 0  # TTL short-circuits before any API calls
+        assert entry.readme == "cached"
+        assert entry.tree_paths == "old/path"
+
+    def test_sync_full_cache_entry_refreshes_past_ttl(self):
+        integration = self._create_integration()
+        existing = IntegrationRepositoryCacheEntry.objects.create(
+            integration=integration,
+            team=self.team,
+            full_name="PostHog/posthog",
+            default_branch="main",
+            default_branch_sha="SHA1",
+            readme="cached",
+            tree_paths="old/path",
+        )
+        # Manually backdate the row past the TTL (auto_now=True blocks direct assignment).
+        stale = timezone.now() - timedelta(seconds=GITHUB_REPOSITORY_FULL_CACHE_TTL_SECONDS + 60)
+        IntegrationRepositoryCacheEntry.objects.filter(pk=existing.pk).update(updated_at=stale)
+
+        responses = self._default_gh_api_responses(sha="SHA2", readme="# New README")
+        with self._patch_gh_api_get(responses):
+            entry = self._cache_for(integration).sync_full_cache_entry("PostHog/posthog")
+
+        assert entry.default_branch_sha == "SHA2"
+        assert entry.readme == "# New README"
+        assert entry.tree_paths == "README.md\nsrc/app.py"
+
+    def test_sync_full_cache_entry_skips_readme_refetch_when_sha_unchanged(self):
+        integration = self._create_integration()
+        existing = IntegrationRepositoryCacheEntry.objects.create(
             integration=integration,
             team=self.team,
             full_name="PostHog/posthog",
@@ -99,6 +147,9 @@ class TestGitHubRepositoryFullCache(BaseTest):
             tree_paths="old/path",
             tree_truncated=False,
         )
+        # Backdate past the TTL so we exercise the SHA light-path, not the TTL short-circuit.
+        stale = timezone.now() - timedelta(seconds=GITHUB_REPOSITORY_FULL_CACHE_TTL_SECONDS + 60)
+        IntegrationRepositoryCacheEntry.objects.filter(pk=existing.pk).update(updated_at=stale)
 
         responses = self._default_gh_api_responses(sha="SHA1")
         # Remove heavy endpoints to assert they are NOT called on the light path.
@@ -115,7 +166,7 @@ class TestGitHubRepositoryFullCache(BaseTest):
 
     def test_sync_full_cache_entry_refetches_when_sha_changed(self):
         integration = self._create_integration()
-        IntegrationRepositoryCacheEntry.objects.create(
+        existing = IntegrationRepositoryCacheEntry.objects.create(
             integration=integration,
             team=self.team,
             full_name="PostHog/posthog",
@@ -124,6 +175,9 @@ class TestGitHubRepositoryFullCache(BaseTest):
             readme="old readme",
             tree_paths="old/path",
         )
+        # Backdate past the TTL to skip the TTL short-circuit and reach the SHA check.
+        stale = timezone.now() - timedelta(seconds=GITHUB_REPOSITORY_FULL_CACHE_TTL_SECONDS + 60)
+        IntegrationRepositoryCacheEntry.objects.filter(pk=existing.pk).update(updated_at=stale)
         responses = self._default_gh_api_responses(sha="SHA2", readme="# New README")
 
         with self._patch_gh_api_get(responses):

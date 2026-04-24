@@ -13,9 +13,11 @@ from __future__ import annotations
 import time
 import base64
 from collections.abc import Awaitable, Callable
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from django.db import models
+from django.utils import timezone
 
 import structlog
 
@@ -27,6 +29,11 @@ if TYPE_CHECKING:
     pass
 
 logger = structlog.get_logger(__name__)
+
+# Rows fresher than this skip GitHub entirely. Mirrors
+# GITHUB_REPOSITORY_CACHE_TTL_SECONDS semantics (see `Integration.repository_cache`).
+# Past the TTL we still do a cheap SHA check before deciding to refetch the tree.
+GITHUB_REPOSITORY_FULL_CACHE_TTL_SECONDS = 60 * 60
 
 
 class IntegrationRepositoryCacheEntry(models.Model):
@@ -67,6 +74,11 @@ class GitHubRepositoryFullCache:
     def integration(self) -> Integration:
         return self.github.integration
 
+    @staticmethod
+    def _is_fresh(entry: IntegrationRepositoryCacheEntry) -> bool:
+        age = timezone.now() - entry.updated_at
+        return age < timedelta(seconds=GITHUB_REPOSITORY_FULL_CACHE_TTL_SECONDS)
+
     def sync_full_cache_entry(self, full_name: str) -> IntegrationRepositoryCacheEntry:
         """Fetch one repo's heavy metadata + README + file tree, upsert the cache row."""
         # 1. Validate input.
@@ -74,7 +86,20 @@ class GitHubRepositoryFullCache:
             raise ValueError(f"full_name must be in 'owner/repo' format, got {full_name!r}")
         owner, repo = full_name.split("/", 1)
         start = time.monotonic()
-        # 2. Always fetch repo metadata + default-branch SHA (cheap; needed to choose light vs heavy path).
+
+        # 2. TTL gate: fresh row → skip GitHub entirely.
+        existing = self.integration.repository_cache_entries.filter(full_name=full_name).first()
+        if existing and existing.readme and self._is_fresh(existing):
+            logger.info(
+                "github_full_cache.sync_repo",
+                integration_id=self.integration.id,
+                full_name=full_name,
+                ttl_hit=True,
+                duration_ms=int((time.monotonic() - start) * 1000),
+            )
+            return existing
+
+        # 3. Fetch repo metadata + default-branch SHA (cheap; needed to choose light vs heavy path).
         repo_data = self.github._gh_api_get(f"/repos/{owner}/{repo}")
         default_branch = repo_data.get("default_branch") or "main"
         branch_data = self.github._gh_api_get(f"/repos/{owner}/{repo}/branches/{default_branch}")
@@ -84,8 +109,6 @@ class GitHubRepositoryFullCache:
             raise GitHubIntegrationError(
                 f"GitHubRepositoryFullCache: branch {default_branch} missing commit sha for {full_name}"
             )
-        # 3. Look up the existing cached row to decide light vs heavy path.
-        existing = self.integration.repository_cache_entries.filter(full_name=full_name).first()
         # 4. Light path: SHA unchanged + readme already cached → refresh only mutable metadata, skip README/tree.
         if existing and existing.default_branch_sha == default_branch_sha and existing.readme:
             existing.description = repo_data.get("description")
@@ -114,7 +137,7 @@ class GitHubRepositoryFullCache:
             )
             return existing
         # 5. Heavy path
-        # 5a: best-effort README (404 is normal — repos without one stay with empty string).
+        # 5a. Best-effort README (404 is normal — repos without one stay with empty string).
         readme_text = ""
         try:
             readme_data = self.github._gh_api_get(f"/repos/{owner}/{repo}/readme")

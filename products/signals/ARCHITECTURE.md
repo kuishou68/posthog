@@ -174,7 +174,15 @@ Keeping repository selection in its own activity gives it independent retry / ti
 
 ##### Repository heavy cache
 
-`IntegrationRepositoryCacheEntry` (Postgres, defined in `posthog/models/integration_repository_cache.py`) stores per-repo README + recursive blob paths + descriptive metadata, populated lazily by `GitHubRepositoryFullCache.sync_full_cache_entry()` and SHA-gated against the default-branch commit. It's exposed to the selection agent as the HogQL system table `system.integration_repository_cache` so the agent can grep paths server-side via `ARRAY JOIN splitByString('\n', tree_paths)` instead of hitting GitHub's `/search/code` endpoint (30 req/min hard ceiling). The lightweight (id, name, full_name) list stays on `Integration.repository_cache` (JSONField) so the IDE repo-dropdown read path is unchanged.
+`IntegrationRepositoryCacheEntry` (Postgres, defined in `posthog/models/integration_repository_cache.py`) stores per-repo README + recursive blob paths + descriptive metadata, populated lazily by `GitHubRepositoryFullCache.sync_full_cache_entry()`. It's exposed to the selection agent as the HogQL system table `system.integration_repository_cache` so the agent can grep paths server-side via `ARRAY JOIN splitByString('\n', tree_paths)` instead of hitting GitHub's `/search/code` endpoint (30 req/min hard ceiling). The lightweight (id, name, full_name) list stays on `Integration.repository_cache` (JSONField) so the IDE repo-dropdown read path is unchanged.
+
+`sync_full_cache_entry()` uses a two-tier freshness check to keep refresh cost proportional to repo activity:
+
+1. **TTL gate** — if a cached row exists, has a readme, and `updated_at < now - GITHUB_REPOSITORY_FULL_CACHE_TTL_SECONDS` (1h, matching `GITHUB_REPOSITORY_CACHE_TTL_SECONDS`), return it immediately with **zero API calls**.
+2. **SHA gate** — past the TTL, fetch `/repos/{owner}/{repo}` + `/repos/{owner}/{repo}/branches/{default_branch}` (2 cheap calls). If the returned `default_branch.commit.sha` matches the cached `default_branch_sha`, refresh only mutable metadata (description/topics/archived/fork/primary_language/default_branch) — skip README and tree refetch.
+3. **Heavy refetch** — SHA changed → fetch README (best-effort; 404s become empty string) and the recursive file tree, then upsert the row.
+
+Bulk sync (`sync_full_cache`) fans `sync_full_cache_entry` out over all repos from the JSONField list via `run_parallel_with_backoff` (concurrency 10, exponential backoff on secondary rate limits). Errors are returned in-place per repo rather than raised — the bulk sync never fails the whole batch.
 
 #### Re-promotion
 
