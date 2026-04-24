@@ -5,6 +5,7 @@ import { useEffect } from 'react'
 import { IconDashboard, IconGraph, IconNotebook } from '@posthog/icons'
 
 import { LemonButton } from 'lib/lemon-ui/LemonButton'
+import { LemonTag } from 'lib/lemon-ui/LemonTag'
 import { SceneExport } from 'scenes/sceneTypes'
 
 import { GuestGrant } from '~/types'
@@ -12,15 +13,15 @@ import { GuestGrant } from '~/types'
 import { guestSceneLogic } from './guestSceneLogic'
 
 function grantUrl(grant: GuestGrant): string {
-    const { team_id, resource, resource_id } = grant
+    const { team_id, resource, resource_id_url } = grant
     if (resource === 'dashboard') {
-        return `/project/${team_id}/dashboard/${resource_id}`
+        return `/project/${team_id}/dashboard/${resource_id_url}`
     }
     if (resource === 'insight') {
-        return `/project/${team_id}/insights/${resource_id}`
+        return `/project/${team_id}/insights/${resource_id_url}`
     }
     if (resource === 'notebook') {
-        return `/project/${team_id}/notebooks/${resource_id}`
+        return `/project/${team_id}/notebooks/${resource_id_url}`
     }
     return `/project/${team_id}`
 }
@@ -35,8 +36,12 @@ function grantIcon(resource: GuestGrant['resource']): JSX.Element {
     return <IconNotebook fontSize="20" />
 }
 
+function accessLevelLabel(accessLevel: GuestGrant['access_level']): string {
+    return accessLevel === 'editor' ? 'Edit' : 'View'
+}
+
 function GrantCard({ grant }: { grant: GuestGrant }): JSX.Element {
-    const label = grant.resource_name || `${grant.resource} ${grant.resource_id}`
+    const label = grant.resource_name || `${grant.resource} ${grant.resource_id_url}`
     return (
         <LemonButton
             type="secondary"
@@ -44,6 +49,14 @@ function GrantCard({ grant }: { grant: GuestGrant }): JSX.Element {
             icon={grantIcon(grant.resource)}
             className="w-full justify-start"
             size="medium"
+            sideIcon={
+                <LemonTag
+                    type={grant.access_level === 'editor' ? 'primary' : 'default'}
+                    data-attr="guest-grant-access-level"
+                >
+                    {accessLevelLabel(grant.access_level)}
+                </LemonTag>
+            }
         >
             <span className="flex flex-col items-start text-left">
                 <span className="font-medium capitalize">{label}</span>
@@ -90,7 +103,7 @@ export function GuestLandingScene(): JSX.Element {
                         <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">{projectName}</h2>
                         <div className="flex flex-col gap-2">
                             {projectGrants.map((grant, i) => (
-                                <GrantCard key={`${grant.resource}:${grant.resource_id}:${i}`} grant={grant} />
+                                <GrantCard key={`${grant.resource}:${grant.resource_id_pk}:${i}`} grant={grant} />
                             ))}
                         </div>
                     </div>

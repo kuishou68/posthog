@@ -319,8 +319,12 @@ export interface GuestGrant {
     team_id: number
     team_name?: string
     resource: 'dashboard' | 'insight' | 'notebook'
-    resource_id: string
+    /** Primary-key form of the resource id (what the AC table stores). */
+    resource_id_pk: string
+    /** URL-form of the resource id — short_id for insight/notebook, PK for dashboard. */
+    resource_id_url: string
     resource_name?: string
+    access_level: 'viewer' | 'editor'
 }
 
 export type UserTheme = 'light' | 'dark' | 'system'

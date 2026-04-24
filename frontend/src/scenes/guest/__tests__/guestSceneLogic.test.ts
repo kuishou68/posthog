@@ -30,9 +30,27 @@ describe('guestSceneLogic', () => {
             email: 'a@b.co',
             is_guest_in_current_project: true,
             guest_grants: [
-                { team_id: 1, resource: 'dashboard', resource_id: '10' },
-                { team_id: 1, resource: 'insight', resource_id: 'abc' },
-                { team_id: 2, resource: 'notebook', resource_id: 'xyz' },
+                {
+                    team_id: 1,
+                    resource: 'dashboard',
+                    resource_id_pk: '10',
+                    resource_id_url: '10',
+                    access_level: 'viewer',
+                },
+                {
+                    team_id: 1,
+                    resource: 'insight',
+                    resource_id_pk: '42',
+                    resource_id_url: 'abc',
+                    access_level: 'editor',
+                },
+                {
+                    team_id: 2,
+                    resource: 'notebook',
+                    resource_id_pk: '7',
+                    resource_id_url: 'xyz',
+                    access_level: 'viewer',
+                },
             ],
         })
 
@@ -40,10 +58,30 @@ describe('guestSceneLogic', () => {
             hasMultipleGrants: true,
             grantsByProject: {
                 1: [
-                    { team_id: 1, resource: 'dashboard', resource_id: '10' },
-                    { team_id: 1, resource: 'insight', resource_id: 'abc' },
+                    {
+                        team_id: 1,
+                        resource: 'dashboard',
+                        resource_id_pk: '10',
+                        resource_id_url: '10',
+                        access_level: 'viewer',
+                    },
+                    {
+                        team_id: 1,
+                        resource: 'insight',
+                        resource_id_pk: '42',
+                        resource_id_url: 'abc',
+                        access_level: 'editor',
+                    },
                 ],
-                2: [{ team_id: 2, resource: 'notebook', resource_id: 'xyz' }],
+                2: [
+                    {
+                        team_id: 2,
+                        resource: 'notebook',
+                        resource_id_pk: '7',
+                        resource_id_url: 'xyz',
+                        access_level: 'viewer',
+                    },
+                ],
             },
         })
     })
@@ -53,7 +91,15 @@ describe('guestSceneLogic', () => {
             uuid: 'u1',
             email: 'a@b.co',
             is_guest_in_current_project: true,
-            guest_grants: [{ team_id: 1, resource: 'dashboard', resource_id: '10' }],
+            guest_grants: [
+                {
+                    team_id: 1,
+                    resource: 'dashboard',
+                    resource_id_pk: '10',
+                    resource_id_url: '10',
+                    access_level: 'viewer',
+                },
+            ],
         })
         await expectLogic(guestSceneLogic).toMatchValues({ hasMultipleGrants: false })
     })
