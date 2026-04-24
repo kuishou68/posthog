@@ -1698,6 +1698,8 @@ export namespace Schemas {
       sessionsV2JoinMode?: SessionsV2JoinMode | null;
       /** @nullable */
       timings?: boolean | null;
+      /** Controls which PostHog team IDs are included in team-scoped ClickHouse queries. 'self' keeps the current team only, 'all' expands to all teams in the current organization that the request is allowed to query, and a list scopes the query to the provided team IDs. */
+      teamsToQuery?: 'all' | 'self' | number[] | null;
       /** @nullable */
       useMaterializedViews?: boolean | null;
       /** @nullable */
@@ -28743,6 +28745,8 @@ export namespace Schemas {
       logs_settings?: unknown | null;
       /** @nullable */
       proactive_tasks_enabled?: boolean | null;
+      /** Whether this project can run HogQL queries against other projects in the same organization. */
+      can_query_across_organization_projects?: boolean;
       readonly available_setup_task_ids?: readonly AvailableSetupTaskIdsEnum[];
     }
 
@@ -30142,6 +30146,8 @@ export namespace Schemas {
       conversations_settings?: unknown | null;
       /** @nullable */
       proactive_tasks_enabled?: boolean | null;
+      /** Whether this project can run HogQL queries against other projects in the same organization. */
+      can_query_across_organization_projects?: boolean;
       readonly effective_membership_level?: EffectiveMembershipLevelEnum | null;
       readonly has_group_types?: boolean;
       readonly group_types?: readonly PatchedTeamGroupTypesItem[];
@@ -31415,6 +31421,8 @@ export namespace Schemas {
       logs_settings?: unknown | null;
       /** @nullable */
       proactive_tasks_enabled?: boolean | null;
+      /** Whether this project can run HogQL queries against other projects in the same organization. */
+      can_query_across_organization_projects?: boolean;
       readonly available_setup_task_ids: readonly AvailableSetupTaskIdsEnum[];
     }
 
@@ -36023,6 +36031,8 @@ export namespace Schemas {
       conversations_settings?: unknown | null;
       /** @nullable */
       proactive_tasks_enabled?: boolean | null;
+      /** Whether this project can run HogQL queries against other projects in the same organization. */
+      can_query_across_organization_projects?: boolean;
       readonly effective_membership_level: EffectiveMembershipLevelEnum | null;
       readonly has_group_types: boolean;
       readonly group_types: readonly TeamGroupTypesItem[];
