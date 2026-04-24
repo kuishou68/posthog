@@ -67,9 +67,7 @@ export function DataDeletionPreviewPanel(): JSX.Element {
                     {
                         title: 'Properties',
                         dataIndex: 'properties',
-                        render: (value) => (
-                            <code className="text-xs">{(value as string)?.slice(0, 200) ?? ''}</code>
-                        ),
+                        render: (value) => <code className="text-xs">{(value as string)?.slice(0, 200) ?? ''}</code>,
                     },
                 ]}
                 pagination={{ pageSize: 20 }}

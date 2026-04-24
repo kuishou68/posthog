@@ -5,8 +5,8 @@ import { useState } from 'react'
 import { LemonBanner, LemonButton, LemonInput, LemonModal, LemonSelect } from '@posthog/lemon-ui'
 
 import { HogQLEditor } from 'lib/components/HogQLEditor/HogQLEditor'
-import { TaxonomicPopover } from 'lib/components/TaxonomicPopover/TaxonomicPopover'
 import { TaxonomicFilterGroupType } from 'lib/components/TaxonomicFilter/types'
+import { TaxonomicPopover } from 'lib/components/TaxonomicPopover/TaxonomicPopover'
 import { dayjs } from 'lib/dayjs'
 import { LemonCalendarSelectInput } from 'lib/lemon-ui/LemonCalendar/LemonCalendarSelect'
 import { LemonCheckbox } from 'lib/lemon-ui/LemonCheckbox'
@@ -54,9 +54,7 @@ export function DataDeletionNewRequest(): JSX.Element {
                     <LemonField name="start_time" inline>
                         <LemonCalendarSelectInput
                             value={newRequest.start_time ? dayjs(newRequest.start_time) : null}
-                            onChange={(date) =>
-                                setNewRequestValue('start_time', date ? date.toISOString() : null)
-                            }
+                            onChange={(date) => setNewRequestValue('start_time', date ? date.toISOString() : null)}
                             placeholder="Start date"
                             granularity="minute"
                         />
@@ -71,9 +69,7 @@ export function DataDeletionNewRequest(): JSX.Element {
                         <LemonField name="end_time" inline>
                             <LemonCalendarSelectInput
                                 value={newRequest.end_time ? dayjs(newRequest.end_time) : null}
-                                onChange={(date) =>
-                                    setNewRequestValue('end_time', date ? date.toISOString() : null)
-                                }
+                                onChange={(date) => setNewRequestValue('end_time', date ? date.toISOString() : null)}
                                 placeholder="End date"
                                 granularity="minute"
                             />

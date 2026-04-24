@@ -1,4 +1,6 @@
 from datetime import timedelta
+
+from posthog.test.base import APIBaseTest
 from unittest.mock import patch
 
 from django.utils import timezone
@@ -7,7 +9,6 @@ from rest_framework import status
 
 from posthog.models.data_deletion_request import DataDeletionRequest, RequestStatus, RequestType
 from posthog.models.organization import OrganizationMembership
-from posthog.test.base import APIBaseTest
 
 
 class TestDataDeletionRequestAPI(APIBaseTest):

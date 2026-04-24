@@ -2,8 +2,8 @@ import { useActions, useValues } from 'kea'
 
 import { LemonTabs } from '@posthog/lemon-ui'
 
-import { dataDeletionLogic } from './dataDeletionLogic'
 import { DataDeletionHistory } from './DataDeletionHistory'
+import { dataDeletionLogic } from './dataDeletionLogic'
 import { DataDeletionNewRequest } from './DataDeletionNewRequest'
 
 export function DataDeletion(): JSX.Element {

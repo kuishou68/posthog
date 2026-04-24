@@ -25,11 +25,7 @@ from posthog.clickhouse.client.connection import ClickHouseUser
 from posthog.clickhouse.query_tagging import Feature, Product, tags_context
 from posthog.clickhouse.workload import Workload
 from posthog.models.activity_logging.activity_log import Detail, log_activity
-from posthog.models.data_deletion_request import (
-    DataDeletionRequest,
-    RequestStatus,
-    RequestType,
-)
+from posthog.models.data_deletion_request import DataDeletionRequest, RequestStatus, RequestType
 from posthog.permissions import TeamMemberStrictManagementPermission
 
 PREVIEW_SAMPLE_LIMIT = 3000

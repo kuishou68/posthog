@@ -12,14 +12,7 @@ import type { dataDeletionLogicType } from './dataDeletionLogicType'
 
 export type DataDeletionRequestType = 'event_removal' | 'property_removal'
 
-export type DataDeletionStatus =
-    | 'draft'
-    | 'pending'
-    | 'approved'
-    | 'in_progress'
-    | 'queued'
-    | 'completed'
-    | 'failed'
+export type DataDeletionStatus = 'draft' | 'pending' | 'approved' | 'in_progress' | 'queued' | 'completed' | 'failed'
 
 export interface DataDeletionRequest {
     id: string
@@ -187,18 +180,21 @@ export const dataDeletionLogic = kea<dataDeletionLogicType>([
     forms(({ actions, values }) => ({
         newRequest: {
             defaults: DEFAULT_FORM,
+            // kea-forms errors must only attach to scalar fields (DeepPartialMap keeps arrays as-is).
+            // Array-scope errors therefore land on adjacent scalar carriers: hogql_predicate (alt
+            // of events) and request_type (anchor for property_removal scope).
             errors: (form) => ({
-                request_type: !form.request_type ? 'Pick a request type' : undefined,
+                request_type: !form.request_type
+                    ? 'Pick a request type'
+                    : form.request_type === 'property_removal' && form.properties.length === 0
+                      ? 'Choose at least one property to remove'
+                      : undefined,
                 start_time: !form.start_time ? 'Start date is required' : undefined,
                 end_time:
                     !form.end_time_through_now && !form.end_time
                         ? 'Pick an end date, or choose "through now"'
                         : undefined,
-                properties:
-                    form.request_type === 'property_removal' && form.properties.length === 0
-                        ? 'Choose at least one property to remove'
-                        : undefined,
-                events:
+                hogql_predicate:
                     form.request_type === 'event_removal' &&
                     !form.delete_all_events &&
                     form.events.length === 0 &&
@@ -230,10 +226,7 @@ export const dataDeletionLogic = kea<dataDeletionLogicType>([
         },
     })),
     selectors({
-        previewScoped: [
-            (s) => [s.newRequest],
-            (form: NewRequestFormValues): boolean => formIsSufficientlyScoped(form),
-        ],
+        previewScoped: [(s) => [s.newRequest], (form: NewRequestFormValues): boolean => formIsSufficientlyScoped(form)],
         pendingCount: [
             (s) => [s.deletionRequests],
             (requests: DataDeletionRequest[]): number =>
@@ -243,7 +236,7 @@ export const dataDeletionLogic = kea<dataDeletionLogicType>([
     listeners(({ actions, values }) => ({
         setNewRequestValue: () => {
             if (formIsSufficientlyScoped(values.newRequest)) {
-                actions.refreshPreview()
+                actions.refreshPreview(null)
             } else if (values.preview) {
                 actions.clearPreview()
             }

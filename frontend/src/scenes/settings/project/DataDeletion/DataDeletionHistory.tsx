@@ -97,9 +97,7 @@ export function DataDeletionHistory(): JSX.Element {
                     {
                         title: 'Type',
                         dataIndex: 'request_type',
-                        render: (value) => (
-                            <LemonTag>{value === 'event_removal' ? 'Events' : 'Properties'}</LemonTag>
-                        ),
+                        render: (value) => <LemonTag>{value === 'event_removal' ? 'Events' : 'Properties'}</LemonTag>,
                     },
                     {
                         title: 'Status',
