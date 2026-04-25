@@ -164,9 +164,6 @@ export const FEATURE_FLAGS = {
     CHRISTMAS_OVERRIDE: 'christmas-override', // owner: #team-growth, overrides the checks for Christmas to return true when this is enabled
     HALLOWEEN_OVERRIDE: 'halloween-override', // owner: #team-growth, overrides the checks for Halloween to return true when this is enabled
 
-    // UX flags, used to control the UX of the app
-    AI_FIRST: 'ai-first', // this a larger change, not released to team yet
-
     // Feature flags used to control opt-in for different behaviors, should not be removed
     AUDIT_LOGS_ACCESS: 'audit-logs-access', // owner: #team-platform-features, used to control access to audit logs
     BATCH_EXPORT_EARLIEST_BACKFILL: 'batch-export-earliest-backfill', // owner: #team-batch-exports, allow backfilling from beginning of time
