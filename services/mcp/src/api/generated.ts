@@ -16132,6 +16132,8 @@ export namespace Schemas {
       ExitOnlyAtEnd: 'exit_only_at_end',
     } as const;
 
+    export type ExperimentFeatureFlag = {[key: string]: unknown};
+
     export interface ExperimentHoldout {
       readonly id: number;
       /** @maxLength 400 */
@@ -16182,6 +16184,9 @@ export namespace Schemas {
       rollout_percentage?: number | null;
     }
 
+    /**
+     * Serializer for the join table between experiments and saved metrics.
+     */
     export interface ExperimentToSavedMetric {
       readonly id: number;
       experiment: number;
@@ -16353,7 +16358,7 @@ export namespace Schemas {
       end_date?: string | null;
       /** Unique key for the experiment's feature flag. Letters, numbers, hyphens, and underscores only. Search existing flags with the feature-flags-get-all tool first — reuse an existing flag when possible. */
       feature_flag_key: string;
-      readonly feature_flag: MinimalFeatureFlag;
+      readonly feature_flag: ExperimentFeatureFlag;
       readonly holdout: ExperimentHoldout;
       /**
        * ID of a holdout group to exclude from the experiment.
@@ -16535,7 +16540,9 @@ export namespace Schemas {
     } as const;
 
     /**
-     * Mixin for serializers to add user access control fields
+     * Serializer for saved metrics.
+
+    Handles DRF request/response format and routes to facade layer for business logic.
      */
     export interface ExperimentSavedMetric {
       readonly id: number;
@@ -26736,6 +26743,8 @@ export namespace Schemas {
       readonly updated_at?: string;
     }
 
+    export type PatchedExperimentFeatureFlag = {[key: string]: unknown};
+
     /**
      * Mixin for serializers to add user access control fields
      */
@@ -26758,7 +26767,7 @@ export namespace Schemas {
       end_date?: string | null;
       /** Unique key for the experiment's feature flag. Letters, numbers, hyphens, and underscores only. Search existing flags with the feature-flags-get-all tool first — reuse an existing flag when possible. */
       feature_flag_key?: string;
-      readonly feature_flag?: MinimalFeatureFlag;
+      readonly feature_flag?: PatchedExperimentFeatureFlag;
       readonly holdout?: ExperimentHoldout;
       /**
        * ID of a holdout group to exclude from the experiment.
@@ -26841,7 +26850,9 @@ export namespace Schemas {
     }
 
     /**
-     * Mixin for serializers to add user access control fields
+     * Serializer for saved metrics.
+
+    Handles DRF request/response format and routes to facade layer for business logic.
      */
     export interface PatchedExperimentSavedMetric {
       readonly id?: number;

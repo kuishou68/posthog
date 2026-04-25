@@ -153,6 +153,11 @@ export const experimentHoldoutsDestroy = async (
     })
 }
 
+/**
+ * ViewSet for experiment saved metrics.
+
+All operations route through the facade layer instead of calling service directly.
+ */
 export const getExperimentSavedMetricsListUrl = (projectId: string, params?: ExperimentSavedMetricsListParams) => {
     const normalizedParams = new URLSearchParams()
 
@@ -180,6 +185,11 @@ export const experimentSavedMetricsList = async (
     })
 }
 
+/**
+ * ViewSet for experiment saved metrics.
+
+All operations route through the facade layer instead of calling service directly.
+ */
 export const getExperimentSavedMetricsCreateUrl = (projectId: string) => {
     return `/api/projects/${projectId}/experiment_saved_metrics/`
 }
@@ -197,6 +207,11 @@ export const experimentSavedMetricsCreate = async (
     })
 }
 
+/**
+ * ViewSet for experiment saved metrics.
+
+All operations route through the facade layer instead of calling service directly.
+ */
 export const getExperimentSavedMetricsRetrieveUrl = (projectId: string, id: number) => {
     return `/api/projects/${projectId}/experiment_saved_metrics/${id}/`
 }
@@ -212,6 +227,11 @@ export const experimentSavedMetricsRetrieve = async (
     })
 }
 
+/**
+ * ViewSet for experiment saved metrics.
+
+All operations route through the facade layer instead of calling service directly.
+ */
 export const getExperimentSavedMetricsUpdateUrl = (projectId: string, id: number) => {
     return `/api/projects/${projectId}/experiment_saved_metrics/${id}/`
 }
@@ -230,6 +250,11 @@ export const experimentSavedMetricsUpdate = async (
     })
 }
 
+/**
+ * ViewSet for experiment saved metrics.
+
+All operations route through the facade layer instead of calling service directly.
+ */
 export const getExperimentSavedMetricsPartialUpdateUrl = (projectId: string, id: number) => {
     return `/api/projects/${projectId}/experiment_saved_metrics/${id}/`
 }
@@ -248,6 +273,11 @@ export const experimentSavedMetricsPartialUpdate = async (
     })
 }
 
+/**
+ * ViewSet for experiment saved metrics.
+
+All operations route through the facade layer instead of calling service directly.
+ */
 export const getExperimentSavedMetricsDestroyUrl = (projectId: string, id: number) => {
     return `/api/projects/${projectId}/experiment_saved_metrics/${id}/`
 }
