@@ -3,7 +3,7 @@
  * MCP service uses these Zod schemas for generated tool handlers.
  * To regenerate: hogli build:openapi
  *
- * PostHog API - MCP 17 enabled ops
+ * PostHog API - MCP 10 enabled ops
  * OpenAPI spec version: 1.0.0
  */
 import * as zod from 'zod'
@@ -29,105 +29,6 @@ export const SandboxListQueryParams = /* @__PURE__ */ zod.object({
  */
 export const SandboxRetrieveParams = /* @__PURE__ */ zod.object({
     id: zod.string().describe('A UUID string identifying this sandbox environment.'),
-    project_id: zod
-        .string()
-        .describe(
-            "Project ID of the project you're trying to access. To find the ID of the project, make a call to /api/projects/."
-        ),
-})
-
-export const TaskAutomationsListParams = /* @__PURE__ */ zod.object({
-    project_id: zod
-        .string()
-        .describe(
-            "Project ID of the project you're trying to access. To find the ID of the project, make a call to /api/projects/."
-        ),
-})
-
-export const TaskAutomationsListQueryParams = /* @__PURE__ */ zod.object({
-    limit: zod.number().optional().describe('Number of results to return per page.'),
-    offset: zod.number().optional().describe('The initial index from which to return the results.'),
-})
-
-export const TaskAutomationsCreateParams = /* @__PURE__ */ zod.object({
-    project_id: zod
-        .string()
-        .describe(
-            "Project ID of the project you're trying to access. To find the ID of the project, make a call to /api/projects/."
-        ),
-})
-
-export const taskAutomationsCreateBodyNameMax = 255
-
-export const taskAutomationsCreateBodyRepositoryMax = 255
-
-export const taskAutomationsCreateBodyCronExpressionMax = 100
-
-export const taskAutomationsCreateBodyTimezoneMax = 128
-
-export const taskAutomationsCreateBodyTemplateIdMax = 255
-
-export const TaskAutomationsCreateBody = /* @__PURE__ */ zod.object({
-    name: zod.string().max(taskAutomationsCreateBodyNameMax),
-    prompt: zod.string(),
-    repository: zod.string().max(taskAutomationsCreateBodyRepositoryMax),
-    github_integration: zod.number().nullish(),
-    cron_expression: zod.string().max(taskAutomationsCreateBodyCronExpressionMax),
-    timezone: zod.string().max(taskAutomationsCreateBodyTimezoneMax).optional(),
-    template_id: zod.string().max(taskAutomationsCreateBodyTemplateIdMax).nullish(),
-    enabled: zod.boolean().optional(),
-})
-
-export const TaskAutomationsRetrieveParams = /* @__PURE__ */ zod.object({
-    id: zod.string().describe('A UUID string identifying this task automation.'),
-    project_id: zod
-        .string()
-        .describe(
-            "Project ID of the project you're trying to access. To find the ID of the project, make a call to /api/projects/."
-        ),
-})
-
-export const TaskAutomationsPartialUpdateParams = /* @__PURE__ */ zod.object({
-    id: zod.string().describe('A UUID string identifying this task automation.'),
-    project_id: zod
-        .string()
-        .describe(
-            "Project ID of the project you're trying to access. To find the ID of the project, make a call to /api/projects/."
-        ),
-})
-
-export const taskAutomationsPartialUpdateBodyNameMax = 255
-
-export const taskAutomationsPartialUpdateBodyRepositoryMax = 255
-
-export const taskAutomationsPartialUpdateBodyCronExpressionMax = 100
-
-export const taskAutomationsPartialUpdateBodyTimezoneMax = 128
-
-export const taskAutomationsPartialUpdateBodyTemplateIdMax = 255
-
-export const TaskAutomationsPartialUpdateBody = /* @__PURE__ */ zod.object({
-    name: zod.string().max(taskAutomationsPartialUpdateBodyNameMax).optional(),
-    prompt: zod.string().optional(),
-    repository: zod.string().max(taskAutomationsPartialUpdateBodyRepositoryMax).optional(),
-    github_integration: zod.number().nullish(),
-    cron_expression: zod.string().max(taskAutomationsPartialUpdateBodyCronExpressionMax).optional(),
-    timezone: zod.string().max(taskAutomationsPartialUpdateBodyTimezoneMax).optional(),
-    template_id: zod.string().max(taskAutomationsPartialUpdateBodyTemplateIdMax).nullish(),
-    enabled: zod.boolean().optional(),
-})
-
-export const TaskAutomationsDestroyParams = /* @__PURE__ */ zod.object({
-    id: zod.string().describe('A UUID string identifying this task automation.'),
-    project_id: zod
-        .string()
-        .describe(
-            "Project ID of the project you're trying to access. To find the ID of the project, make a call to /api/projects/."
-        ),
-})
-
-export const TaskAutomationsRunCreateParams = /* @__PURE__ */ zod.object({
-    id: zod.string().describe('A UUID string identifying this task automation.'),
     project_id: zod
         .string()
         .describe(
@@ -368,30 +269,4 @@ export const TasksRunsSessionLogsRetrieveQueryParams = /* @__PURE__ */ zod.objec
         .min(tasksRunsSessionLogsRetrieveQueryOffsetMin)
         .default(tasksRunsSessionLogsRetrieveQueryOffsetDefault)
         .describe('Zero-based offset into the filtered log entries'),
-})
-
-/**
- * Get autonomy readiness details for a specific repository in the current project.
- * @summary Get repository readiness
- */
-export const TasksRepositoryReadinessRetrieveParams = /* @__PURE__ */ zod.object({
-    project_id: zod
-        .string()
-        .describe(
-            "Project ID of the project you're trying to access. To find the ID of the project, make a call to /api/projects/."
-        ),
-})
-
-export const tasksRepositoryReadinessRetrieveQueryRefreshDefault = false
-export const tasksRepositoryReadinessRetrieveQueryWindowDaysDefault = 7
-export const tasksRepositoryReadinessRetrieveQueryWindowDaysMax = 30
-
-export const TasksRepositoryReadinessRetrieveQueryParams = /* @__PURE__ */ zod.object({
-    refresh: zod.boolean().default(tasksRepositoryReadinessRetrieveQueryRefreshDefault),
-    repository: zod.string().min(1).describe('Repository in org/repo format'),
-    window_days: zod
-        .number()
-        .min(1)
-        .max(tasksRepositoryReadinessRetrieveQueryWindowDaysMax)
-        .default(tasksRepositoryReadinessRetrieveQueryWindowDaysDefault),
 })

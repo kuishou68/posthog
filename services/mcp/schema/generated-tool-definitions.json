@@ -3728,21 +3728,6 @@
             "readOnlyHint": false
         }
     },
-    "tasks-repository-readiness-retrieve": {
-        "description": "Check autonomy readiness for a repository (`owner/repo`) in the current project. Returns a readiness score and signals indicating whether the repository is configured for agent tasks. Supports `window_days` and `refresh` query params.",
-        "category": "Tasks",
-        "feature": "tasks",
-        "summary": "Check repository readiness",
-        "title": "Check repository readiness",
-        "required_scopes": ["task:read"],
-        "new_mcp": true,
-        "annotations": {
-            "destructiveHint": false,
-            "idempotentHint": true,
-            "openWorldHint": true,
-            "readOnlyHint": true
-        }
-    },
     "tasks-runs-list": {
         "description": "List all runs for a specific task. Returns id, status, stage, environment, branch, error_message, created_at, and finished_at for each run.",
         "category": "Tasks",
@@ -3788,36 +3773,6 @@
             "readOnlyHint": true
         }
     },
-    "task-automations-list": {
-        "description": "List cron-scheduled task automations for the current project. Each automation creates and runs a task on its configured schedule.",
-        "category": "Tasks",
-        "feature": "tasks",
-        "summary": "List task automations",
-        "title": "List task automations",
-        "required_scopes": ["task:read"],
-        "new_mcp": true,
-        "annotations": {
-            "destructiveHint": false,
-            "idempotentHint": true,
-            "openWorldHint": true,
-            "readOnlyHint": true
-        }
-    },
-    "task-automations-create": {
-        "description": "Create a cron-scheduled automation that creates and runs tasks on a schedule. Required fields: `name`, `prompt`, `repository` (organization/repository format), and `cron_expression`. Optional: `timezone`, `github_integration`, `template_id`, `enabled`. The schedule is synced with Temporal after creation.",
-        "category": "Tasks",
-        "feature": "tasks",
-        "summary": "Create task automation",
-        "title": "Create task automation",
-        "required_scopes": ["task:write"],
-        "new_mcp": true,
-        "annotations": {
-            "destructiveHint": false,
-            "idempotentHint": false,
-            "openWorldHint": true,
-            "readOnlyHint": false
-        }
-    },
     "sandbox-list": {
         "description": "List sandbox environments available for running tasks in the current project. Returns id, name, and network access level for each environment. Use the id in tasks-run's `sandbox_environment_id` field.",
         "category": "Tasks",
@@ -3846,66 +3801,6 @@
             "idempotentHint": true,
             "openWorldHint": true,
             "readOnlyHint": true
-        }
-    },
-    "task-automations-retrieve": {
-        "description": "Get a specific task automation by ID including name, prompt, repository, cron expression, timezone, enabled state, and last-run metadata (last_run_at, last_run_status, last_task_id, last_task_run_id, last_error).",
-        "category": "Tasks",
-        "feature": "tasks",
-        "summary": "Get task automation",
-        "title": "Get task automation",
-        "required_scopes": ["task:read"],
-        "new_mcp": true,
-        "annotations": {
-            "destructiveHint": false,
-            "idempotentHint": true,
-            "openWorldHint": true,
-            "readOnlyHint": true
-        }
-    },
-    "task-automations-partial-update": {
-        "description": "Update an existing task automation. Can change cron expression, timezone, or enabled state. Schedule changes are synced with Temporal automatically.",
-        "category": "Tasks",
-        "feature": "tasks",
-        "summary": "Update task automation",
-        "title": "Update task automation",
-        "required_scopes": ["task:write"],
-        "new_mcp": true,
-        "annotations": {
-            "destructiveHint": false,
-            "idempotentHint": true,
-            "openWorldHint": true,
-            "readOnlyHint": false
-        }
-    },
-    "task-automations-destroy": {
-        "description": "Delete a task automation and remove its Temporal schedule. Existing runs created by this automation are preserved.",
-        "category": "Tasks",
-        "feature": "tasks",
-        "summary": "Delete task automation",
-        "title": "Delete task automation",
-        "required_scopes": ["task:write"],
-        "new_mcp": true,
-        "annotations": {
-            "destructiveHint": true,
-            "idempotentHint": false,
-            "openWorldHint": true,
-            "readOnlyHint": false
-        }
-    },
-    "task-automations-run-create": {
-        "description": "Manually trigger a one-off execution of a task automation, bypassing its cron schedule. Returns the updated automation with its latest run metadata.",
-        "category": "Tasks",
-        "feature": "tasks",
-        "summary": "Run task automation",
-        "title": "Run task automation",
-        "required_scopes": ["task:write"],
-        "new_mcp": true,
-        "annotations": {
-            "destructiveHint": false,
-            "idempotentHint": false,
-            "openWorldHint": true,
-            "readOnlyHint": false
         }
     },
     "web-analytics-weekly-digest": {
