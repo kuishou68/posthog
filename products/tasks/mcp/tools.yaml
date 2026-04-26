@@ -88,18 +88,7 @@ tools:
         enabled: false
     tasks-repository-readiness-retrieve:
         operation: tasks_repository_readiness_retrieve
-        enabled: true
-        scopes:
-            - task:read
-        annotations:
-            readOnly: true
-            destructive: false
-            idempotent: true
-        title: Check repository readiness
-        description: >
-            Check autonomy readiness for a repository (`owner/repo`) in the current project. Returns a readiness score
-            and signals indicating whether the repository is configured for agent tasks. Supports `window_days` and
-            `refresh` query params.
+        enabled: false
     tasks-staged-artifacts-prepare-upload-create:
         operation: tasks_staged_artifacts_prepare_upload_create
         enabled: false
@@ -194,34 +183,10 @@ tools:
         enabled: false
     task-automations-list:
         operation: task_automations_list
-        enabled: true
-        scopes:
-            - task:read
-        annotations:
-            readOnly: true
-            destructive: false
-            idempotent: true
-        enrich_url: '{id}'
-        list: true
-        title: List task automations
-        description: >
-            List cron-scheduled task automations for the current project. Each automation creates and runs a task on its
-            configured schedule.
+        enabled: false
     task-automations-create:
         operation: task_automations_create
-        enabled: true
-        scopes:
-            - task:write
-        annotations:
-            readOnly: false
-            destructive: false
-            idempotent: false
-        enrich_url: '{id}'
-        title: Create task automation
-        description: >
-            Create a cron-scheduled automation that creates and runs tasks on a schedule. Required fields: `name`,
-            `prompt`, `repository` (organization/repository format), and `cron_expression`. Optional: `timezone`,
-            `github_integration`, `template_id`, `enabled`. The schedule is synced with Temporal after creation.
+        enabled: false
     sandbox-list:
         operation: sandbox_list
         enabled: true
@@ -266,59 +231,19 @@ tools:
         enabled: false
     task-automations-retrieve:
         operation: task_automations_retrieve
-        enabled: true
-        scopes:
-            - task:read
-        annotations:
-            readOnly: true
-            destructive: false
-            idempotent: true
-        title: Get task automation
-        description: >
-            Get a specific task automation by ID including name, prompt, repository, cron expression, timezone, enabled
-            state, and last-run metadata (last_run_at, last_run_status, last_task_id, last_task_run_id, last_error).
+        enabled: false
     task-automations-update:
         operation: task_automations_update
         enabled: false
     task-automations-partial-update:
         operation: task_automations_partial_update
-        enabled: true
-        scopes:
-            - task:write
-        annotations:
-            readOnly: false
-            destructive: false
-            idempotent: true
-        title: Update task automation
-        description: >
-            Update an existing task automation. Can change cron expression, timezone, or enabled state. Schedule changes
-            are synced with Temporal automatically.
+        enabled: false
     task-automations-destroy:
         operation: task_automations_destroy
-        enabled: true
-        scopes:
-            - task:write
-        annotations:
-            readOnly: false
-            destructive: true
-            idempotent: false
-        title: Delete task automation
-        description: >
-            Delete a task automation and remove its Temporal schedule. Existing runs created by this automation are
-            preserved.
+        enabled: false
     task-automations-run-create:
         operation: task_automations_run_create
-        enabled: true
-        scopes:
-            - task:write
-        annotations:
-            readOnly: false
-            destructive: false
-            idempotent: false
-        title: Run task automation
-        description: >
-            Manually trigger a one-off execution of a task automation, bypassing its cron schedule. Returns the updated
-            automation with its latest run metadata.
+        enabled: false
     tasks-runs-resume-in-cloud-create:
         operation: tasks_runs_resume_in_cloud_create
         enabled: false
