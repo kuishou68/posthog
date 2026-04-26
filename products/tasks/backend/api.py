@@ -23,6 +23,7 @@ from rest_framework import status, viewsets
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
+from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
@@ -129,6 +130,11 @@ TASK_RUN_ARTIFACT_UPLOAD_EXPIRATION_SECONDS = 60 * 60
 TASK_RUN_ARTIFACT_UPLOAD_FORM_OVERHEAD_BYTES = 64 * 1024
 
 
+class TasksPagination(LimitOffsetPagination):
+    default_limit = 50
+    max_limit = 100
+
+
 class TasksAccessPermission(BasePermission):
     message = "You need a valid invite code to access this feature."
 
@@ -168,6 +174,7 @@ class TaskViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
     ]
     permission_classes = [IsAuthenticated, APIScopePermission, TasksAccessPermission]
     scope_object = "task"
+    pagination_class = TasksPagination
     queryset = Task.objects.all()
 
     @validated_request(
@@ -679,6 +686,7 @@ class TaskAutomationViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
     authentication_classes = [SessionAuthentication, PersonalAPIKeyAuthentication, OAuthAccessTokenAuthentication]
     permission_classes = [IsAuthenticated, APIScopePermission, TasksAccessPermission]
     scope_object = "task"
+    pagination_class = TasksPagination
     queryset = TaskAutomation.objects.all()
     filter_rewrite_rules = {"team_id": "task__team_id"}
 
@@ -727,6 +735,7 @@ class TaskRunViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
     ]
     permission_classes = [IsAuthenticated, APIScopePermission, TasksAccessPermission]
     scope_object = "task"
+    pagination_class = TasksPagination
     queryset = TaskRun.objects.select_related("task").all()
     posthog_feature_flag = {
         "tasks": [
@@ -2302,6 +2311,7 @@ class SandboxEnvironmentViewSet(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
     ]
     permission_classes = [IsAuthenticated, APIScopePermission, TasksAccessPermission]
     scope_object = "task"
+    pagination_class = TasksPagination
     queryset = SandboxEnvironment.objects.all()
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
     filter_rewrite_rules = {"team_id": "team_id"}

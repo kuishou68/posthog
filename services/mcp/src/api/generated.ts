@@ -24584,15 +24584,23 @@ export namespace Schemas {
       repository: string;
       /** @nullable */
       github_integration?: number | null;
-      /** @maxLength 100 */
+      /**
+       * Standard 5-field cron expression that drives the schedule (e.g. `0 9 * * 1-5`).
+       * @maxLength 100
+       */
       cron_expression: string;
-      /** @maxLength 128 */
+      /**
+       * IANA timezone in which `cron_expression` is interpreted (e.g. `UTC`, `America/New_York`).
+       * @maxLength 128
+       */
       timezone?: string;
       /**
+       * Optional identifier of the template this automation was created from.
        * @maxLength 255
        * @nullable
        */
       template_id?: string | null;
+      /** When false, the schedule is paused and no runs are created on tick. */
       enabled?: boolean;
       /** @nullable */
       readonly last_run_at: string | null;
@@ -24602,7 +24610,10 @@ export namespace Schemas {
       readonly last_task_id: string | null;
       /** @nullable */
       readonly last_task_run_id: string | null;
-      /** @nullable */
+      /**
+       * Error message from the most recent failed scheduling attempt, if any.
+       * @nullable
+       */
       readonly last_error: string | null;
       readonly created_at: string;
       readonly updated_at: string;
@@ -24635,26 +24646,48 @@ export namespace Schemas {
 
     export interface Task {
       readonly id: string;
-      /** @nullable */
+      /**
+       * Per-team sequential task number, assigned on creation.
+       * @nullable
+       */
       readonly task_number: number | null;
       readonly slug: string;
-      /** @maxLength 255 */
+      /**
+       * Short human-readable title. Auto-generated from `description` when omitted.
+       * @maxLength 255
+       */
       title?: string;
+      /** True when the title was provided by the caller; False when auto-generated from `description`. */
       title_manually_set?: boolean;
+      /** Free-form description of the work to be done. Used as the prompt passed to the agent. */
       description?: string;
+      /** PostHog product or surface that created this task (e.g. error_tracking, slack, user_created).
+
+    * `error_tracking` - Error Tracking
+    * `eval_clusters` - Eval Clusters
+    * `user_created` - User Created
+    * `automation` - Automation
+    * `slack` - Slack
+    * `support_queue` - Support Queue
+    * `session_summaries` - Session Summaries
+    * `signal_report` - Signal Report */
       origin_product?: OriginProductEnum;
       /**
+       * Target GitHub repository in `organization/repo` format (e.g. `posthog/posthog-js`).
        * @maxLength 255
        * @nullable
        */
       repository?: string | null;
       /**
-       * GitHub integration for this task
+       * GitHub integration the agent uses to clone and open pull requests against `repository`.
        * @nullable
        */
       github_integration?: number | null;
       /** @nullable */
       signal_report?: string | null;
+      /** When linking a task to a signal report, which SignalReportTask relationship row to create. Only `implementation` is supported via the public API.
+
+    * `implementation` - Implementation */
       signal_report_task_relationship?: SignalReportTaskRelationshipEnum;
       /** JSON schema for the task. This is used to validate the output of the task. */
       json_schema?: unknown | null;
@@ -29919,26 +29952,48 @@ export namespace Schemas {
 
     export interface PatchedTask {
       readonly id?: string;
-      /** @nullable */
+      /**
+       * Per-team sequential task number, assigned on creation.
+       * @nullable
+       */
       readonly task_number?: number | null;
       readonly slug?: string;
-      /** @maxLength 255 */
+      /**
+       * Short human-readable title. Auto-generated from `description` when omitted.
+       * @maxLength 255
+       */
       title?: string;
+      /** True when the title was provided by the caller; False when auto-generated from `description`. */
       title_manually_set?: boolean;
+      /** Free-form description of the work to be done. Used as the prompt passed to the agent. */
       description?: string;
+      /** PostHog product or surface that created this task (e.g. error_tracking, slack, user_created).
+
+    * `error_tracking` - Error Tracking
+    * `eval_clusters` - Eval Clusters
+    * `user_created` - User Created
+    * `automation` - Automation
+    * `slack` - Slack
+    * `support_queue` - Support Queue
+    * `session_summaries` - Session Summaries
+    * `signal_report` - Signal Report */
       origin_product?: OriginProductEnum;
       /**
+       * Target GitHub repository in `organization/repo` format (e.g. `posthog/posthog-js`).
        * @maxLength 255
        * @nullable
        */
       repository?: string | null;
       /**
-       * GitHub integration for this task
+       * GitHub integration the agent uses to clone and open pull requests against `repository`.
        * @nullable
        */
       github_integration?: number | null;
       /** @nullable */
       signal_report?: string | null;
+      /** When linking a task to a signal report, which SignalReportTask relationship row to create. Only `implementation` is supported via the public API.
+
+    * `implementation` - Implementation */
       signal_report_task_relationship?: SignalReportTaskRelationshipEnum;
       /** JSON schema for the task. This is used to validate the output of the task. */
       json_schema?: unknown | null;
@@ -29968,15 +30023,23 @@ export namespace Schemas {
       repository?: string;
       /** @nullable */
       github_integration?: number | null;
-      /** @maxLength 100 */
+      /**
+       * Standard 5-field cron expression that drives the schedule (e.g. `0 9 * * 1-5`).
+       * @maxLength 100
+       */
       cron_expression?: string;
-      /** @maxLength 128 */
+      /**
+       * IANA timezone in which `cron_expression` is interpreted (e.g. `UTC`, `America/New_York`).
+       * @maxLength 128
+       */
       timezone?: string;
       /**
+       * Optional identifier of the template this automation was created from.
        * @maxLength 255
        * @nullable
        */
       template_id?: string | null;
+      /** When false, the schedule is paused and no runs are created on tick. */
       enabled?: boolean;
       /** @nullable */
       readonly last_run_at?: string | null;
@@ -29986,7 +30049,10 @@ export namespace Schemas {
       readonly last_task_id?: string | null;
       /** @nullable */
       readonly last_task_run_id?: string | null;
-      /** @nullable */
+      /**
+       * Error message from the most recent failed scheduling attempt, if any.
+       * @nullable
+       */
       readonly last_error?: string | null;
       readonly created_at?: string;
       readonly updated_at?: string;

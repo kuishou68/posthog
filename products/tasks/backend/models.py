@@ -64,11 +64,27 @@ class Task(DeletedMetaFields, models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     team = models.ForeignKey("posthog.Team", on_delete=models.CASCADE)
     created_by = models.ForeignKey("posthog.User", on_delete=models.SET_NULL, null=True, blank=True, db_index=False)
-    task_number = models.IntegerField(null=True, blank=True)
-    title = models.CharField(max_length=255)
-    title_manually_set = models.BooleanField(default=False)
-    description = models.TextField()
-    origin_product = models.CharField(max_length=20, choices=OriginProduct.choices)
+    task_number = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Per-team sequential task number, assigned on creation.",
+    )
+    title = models.CharField(
+        max_length=255,
+        help_text="Short human-readable title. Auto-generated from `description` when not provided.",
+    )
+    title_manually_set = models.BooleanField(
+        default=False,
+        help_text="True when the title was provided by the caller; False when auto-generated from `description`.",
+    )
+    description = models.TextField(
+        help_text="Free-form description of the work to be done. Used as the prompt passed to the agent.",
+    )
+    origin_product = models.CharField(
+        max_length=20,
+        choices=OriginProduct.choices,
+        help_text="PostHog product or surface that created this task (e.g. error_tracking, slack, user_created).",
+    )
 
     # Repository configuration
     github_integration = models.ForeignKey(
@@ -77,12 +93,15 @@ class Task(DeletedMetaFields, models.Model):
         null=True,
         blank=True,
         limit_choices_to={"kind": "github"},
-        help_text="GitHub integration for this task",
+        help_text="GitHub integration the agent uses to clone and open pull requests against `repository`.",
     )
 
     repository = models.CharField(
-        max_length=255, null=True, blank=True
-    )  # Format is organization/repo, for example posthog/posthog-js
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Target GitHub repository in `organization/repo` format (e.g. `posthog/posthog-js`).",
+    )
 
     # DEPRECATED - do not use
     signal_report = models.ForeignKey(
@@ -362,13 +381,44 @@ class TaskAutomation(models.Model):
         RUNNING = "running", "Running"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    cron_expression = models.CharField(max_length=100)
-    timezone = models.CharField(max_length=128, default="UTC")
-    template_id = models.CharField(max_length=255, null=True, blank=True)
-    enabled = models.BooleanField(default=True)
-    task = models.OneToOneField(Task, on_delete=models.CASCADE, related_name="automation")
-    last_task_run = models.ForeignKey("TaskRun", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
-    last_error = models.TextField(null=True, blank=True)
+    cron_expression = models.CharField(
+        max_length=100,
+        help_text="Standard 5-field cron expression that drives the schedule (e.g. `0 9 * * 1-5`).",
+    )
+    timezone = models.CharField(
+        max_length=128,
+        default="UTC",
+        help_text="IANA timezone in which `cron_expression` is interpreted (e.g. `UTC`, `America/New_York`).",
+    )
+    template_id = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Optional identifier of the template this automation was created from.",
+    )
+    enabled = models.BooleanField(
+        default=True,
+        help_text="When false, the schedule is paused and no runs are created on tick.",
+    )
+    task = models.OneToOneField(
+        Task,
+        on_delete=models.CASCADE,
+        related_name="automation",
+        help_text="Underlying Task whose title, description, and repository are reused for each scheduled run.",
+    )
+    last_task_run = models.ForeignKey(
+        "TaskRun",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="Most recent TaskRun this automation produced, if any.",
+    )
+    last_error = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Error message from the most recent failed scheduling attempt, if any.",
+    )
     created_at = models.DateTimeField(default=django_timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
