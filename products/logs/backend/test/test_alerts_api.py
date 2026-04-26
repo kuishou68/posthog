@@ -1243,14 +1243,16 @@ class TestLogsAlertAPI(APIBaseTest):
     @parameterized.expand(
         [
             (
+                # Single cadence bucket above threshold → fires once.
                 "fires",
-                [(0, 40), (1, 40), (2, 40)],
+                [(0, 150)],
                 {"threshold_count": 100, "threshold_operator": "above", "window_minutes": 5},
                 {"min_fire_count": 1},
             ),
             (
+                # Bucket at cadence 0 fires; cadence 5 (5 min later) drops to 0 → resolves.
                 "fires_and_resolves",
-                [(0, 40), (1, 40), (2, 40)],
+                [(0, 150), (5, 0)],
                 {"threshold_count": 100, "threshold_operator": "above", "window_minutes": 5},
                 {"min_fire_count": 1, "min_resolve_count": 1},
             ),
@@ -1275,14 +1277,11 @@ class TestLogsAlertAPI(APIBaseTest):
     @freeze_time("2025-12-16T10:30:00Z")
     @patch("products.logs.backend.alerts_api.AlertCheckQuery")
     def test_simulate_n_of_m_delays_firing(self, mock_query_cls):
-        # window=5, 2-of-3 N-of-M. A spike at minute 0 pushes rolling sum above threshold
-        # for minutes 0-4. At minute 0 there's only one evaluation, so N=2 isn't met and
-        # the alert stays not_firing; by minute 1 there are two consecutive breaches,
-        # satisfying 2-of-3 -> fires. This is the "N-of-M delays firing past first breach"
-        # invariant; with window=5 the delay is one tick rather than two.
-        mock_query_cls.return_value.execute_bucketed.return_value = self._mock_minute_buckets(
-            [(0, 150), (1, 50), (2, 150)]
-        )
+        # window=5, 2-of-3 N-of-M. Cadence-spaced buckets at minute 0 and 5 each have
+        # 150 logs (above threshold=100). At cadence 0 only 1-of-3 has breached, so
+        # alert stays not_firing. At cadence 5 there are 2 consecutive breaches,
+        # satisfying 2-of-3 -> fires. Demonstrates "N-of-M delays firing past first breach".
+        mock_query_cls.return_value.execute_bucketed.return_value = self._mock_minute_buckets([(0, 150), (5, 150)])
 
         response = self.client.post(
             self._simulate_url(),
@@ -1297,9 +1296,9 @@ class TestLogsAlertAPI(APIBaseTest):
         )
         data = response.json()
         data_buckets = [b for b in data["buckets"] if b["count"] > 0]
-        # Minute 0: rolling=150 breached, but only 1 evaluation -> not_firing
+        # Cadence 0: 150 breached, 1-of-3 -> not_firing
         assert data_buckets[0]["state"] == "not_firing"
-        # Minute 1: rolling=200 breached, 2 consecutive breaches met N=2 -> fires
+        # Cadence 5: 150 breached, 2-of-3 satisfied -> fires
         assert data_buckets[1]["state"] == "firing"
         assert data_buckets[1]["notification"] == "fire"
 
